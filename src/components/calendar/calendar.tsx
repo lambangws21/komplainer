@@ -2,7 +2,7 @@
 
 import React from "react"
 import Card from "@/components/dashboard/cardui"
-import CalendarGoogle from "@/components/calendar/calendar"
+import { Calendar } from "@/components/ui/calendar"
 import {Component as MyChart} from "@/components/chart/chart-component"
 import { MyDataTable } from "@/components/data-table/data"
 
@@ -15,7 +15,7 @@ export default function DashboardPage() {
       {/* Baris 1: Next Game & Games Statistic */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card animated delay="0.2s" className="p-4">
-          <CalendarGoogle/>
+          <Calendar />
         </Card>
 
         <Card animated delay="0.2s" className="p-4">

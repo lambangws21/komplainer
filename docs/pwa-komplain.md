@@ -42,3 +42,7 @@
 - MDN: https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable
 - Apple: https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios
 - Google web.dev: https://web.dev/learn/pwa/installation-prompt
+
+## Pembaruan verifikasi deployment
+
+Pada 3 Oktober 2026, build produksi berhasil setelah dependensi diselaraskan dan impor rekursif kalender dashboard diperbaiki. Pemasangan PWA pada perangkat fisik tetap perlu diuji setelah deployment HTTPS.

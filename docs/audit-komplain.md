@@ -44,3 +44,11 @@ Tanggal: 3 Oktober 2026. Cakupan: `src/app/komplain/page.jsx`, konfigurasi styli
 - ESLint untuk halaman, komponen data, helper, serta pengujian: lolos.
 - Browser desktop: data tabel, jumlah rekap, perpindahan minggu/empty state, tautan ke tabel periode, detail dan pemulihan fokus Escape diverifikasi. Tampilan rekap juga diperiksa pada viewport 390 × 844; override dikembalikan setelah pemeriksaan.
 - Pemeriksaan ini hanya membaca data backend. Tidak menjalankan mutasi Google Sheets. Batas build produksi yang dicatat sebelumnya masih berlaku.
+
+## Perbaikan deployment Vercel (3 Oktober 2026)
+
+- ERESOLVE diperbaiki dengan `cmdk` 1.1.1 (mendukung React 19), `react-day-picker` 8.10.2 (mendukung React 19 tanpa migrasi API kalender), serta `date-fns` 3.6.0 yang memenuhi peer dependency DayPicker v8. Package-lock diperbarui dengan npm biasa, tanpa --force atau --legacy-peer-deps.
+- Next.js dan eslint-config-next diselaraskan ke 15.5.27; React/react-dom ke 19.0.4.
+- Komponen kalender dashboard sebelumnya mengimpor dan merender dirinya sendiri sehingga prerender kehabisan memori. Kini menggunakan komponen Calendar UI.
+- Error lint pada konstanta toast dan import plugin Tailwind diperbaiki. `npm run lint` kini menjalankan ESLint langsung dan mengabaikan direktori hasil build.
+- Verifikasi: npm ci tanpa bypass peer dependencies berhasil; npm run lint dan tujuh pengujian berhasil; npm run build produksi berhasil untuk semua rute. Hambatan build Google Fonts yang dicatat pada pemeriksaan sebelumnya tidak terjadi pada build dengan akses jaringan ini.
