@@ -20,8 +20,10 @@ npm ci
 Buat `.env.local` di root proyek, lalu isi URL deployment Web App Google Apps Script:
 
 ```dotenv
-NEXT_PUBLIC_GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 ```
+
+Nama lama `NEXT_PUBLIC_GOOGLE_SCRIPT_URL` tetap didukung sebagai fallback; gunakan `GOOGLE_SCRIPT_URL` untuk konfigurasi baru.
 
 Contoh skrip backend ada di [docs/appscript.gs](docs/appscript.gs). Sesuaikan deployment dan akses Google Sheets dengan kebutuhan tim.
 
@@ -38,6 +40,17 @@ npx tsc --noEmit --incremental false
 npx eslint src/app/komplain/*.jsx src/app/komplain/*.mjs src/app/manifest.ts src/app/layout.tsx next.config.ts tests/pwa.test.mjs
 node --test tests/pwa.test.mjs src/app/komplain/weekly-summary.test.mjs
 ```
+
+## Environment di Vercel
+
+File `.env.local` tidak dikirim ke GitHub dan tidak otomatis tersedia pada Vercel.
+
+1. Buka proyek Vercel → Settings → Environment Variables.
+2. Tambahkan `GOOGLE_SCRIPT_URL` dengan nilai URL Web App Google Apps Script yang berakhir `/exec`.
+3. Pilih Production dan Preview bila digunakan, lalu simpan.
+4. Deploy commit terbaru atau redeploy setelah menambahkan/mengubah variabel.
+
+Nilai URL diisikan tanpa tanda kutip. API mendukung nama lama `NEXT_PUBLIC_GOOGLE_SCRIPT_URL` juga. Jika keduanya tersedia, `GOOGLE_SCRIPT_URL` diprioritaskan.
 
 ## Build dan PWA
 

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 
-// Ambil URL Google Apps Script Web App dari environment variable
-const GOOGLE_SCRIPT_URL = process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL;
+// Prefer the server-only variable; support existing deployments using the old name.
+function getGoogleScriptUrl() {
+  return process.env.GOOGLE_SCRIPT_URL?.trim() || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL?.trim();
+}
+const CONFIG_ERROR = 'URL Google Apps Script belum dikonfigurasi. Isi GOOGLE_SCRIPT_URL di environment deployment (Vercel: Settings → Environment Variables), lalu deploy ulang. Untuk lokal, isi .env.local.';
 
 /**
  * GET Handler
@@ -9,9 +12,10 @@ const GOOGLE_SCRIPT_URL = process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL;
  */
 export async function GET() {
   try {
+    const GOOGLE_SCRIPT_URL = getGoogleScriptUrl();
     if (!GOOGLE_SCRIPT_URL) {
       return NextResponse.json(
-        { status: 'error', message: 'GOOGLE_SCRIPT_URL belum dikonfigurasi di file .env.local' },
+        { status: 'error', message: CONFIG_ERROR },
         { status: 500 }
       );
     }
@@ -44,9 +48,10 @@ export async function GET() {
  */
 export async function POST(request) {
   try {
+    const GOOGLE_SCRIPT_URL = getGoogleScriptUrl();
     if (!GOOGLE_SCRIPT_URL) {
       return NextResponse.json(
-        { status: 'error', message: 'GOOGLE_SCRIPT_URL belum dikonfigurasi di file .env.local' },
+        { status: 'error', message: CONFIG_ERROR },
         { status: 500 }
       );
     }
