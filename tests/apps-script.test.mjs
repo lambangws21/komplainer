@@ -183,6 +183,11 @@ test('admin delegates a case to a reporter without granting global access or cha
   assert.ok(f.request({ action: 'list', ...f.adminSession }).assignees.some((user) => user.id === delegate.user.id));
   assert.equal(f.request({ action: 'assign', ...delegate, id: item.id, version: 1, picId: delegate.user.id }).code, 404);
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: 1, picId: delegate.user.id }).data;
+  assert.equal(item.picRole, 'pelapor');
+  assert.equal(item.pelaporRole, 'pelapor');
+  const delegatedRow = f.request({ action: 'list', ...delegate }).data[0];
+  assert.equal(delegatedRow.picRole, 'pelapor');
+  assert.equal('passwordHash' in delegatedRow, false);
   assert.equal(f.request({ action: 'session', ...delegate }).user.role, 'pelapor');
   assert.equal(f.request({ action: 'list', ...delegate }).data.length, 1);
   assert.equal(f.request({ action: 'detail', ...delegate, id: unrelated.id }).code, 404);

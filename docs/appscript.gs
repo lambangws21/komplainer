@@ -178,7 +178,16 @@ function report(row, index) {
   return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, row: index + 2 };
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
-function publicReport(item) { var result = Object.assign({}, item); delete result.row; return result; }
+function publicReport(item, accounts) {
+  var result = Object.assign({}, item);
+  var users = accounts || allUsers();
+  var owner = users.filter(function (user) { return user.id === item.pelaporId; })[0];
+  var pic = users.filter(function (user) { return user.id === item.picId; })[0];
+  result.pelaporRole = owner ? owner.role : null;
+  result.picRole = pic ? pic.role : null;
+  delete result.row;
+  return result;
+}
 function canRead(item, user) { return user.role === 'admin' || item.pelaporId === user.id || item.picId === user.id; }
 function findReport(id, user) {
   var item = reports().filter(function (value) { return value.id === String(id); })[0];
@@ -289,7 +298,8 @@ function handle(body) {
     return { status: 'success' };
   }
   if (action === 'list') {
-    return { status: 'success', data: reports().filter(function (item) { return canRead(item, user); }).map(publicReport), assignees: user.role === 'admin' ? allUsers().filter(function (item) { return item.active && (item.role === 'petugas' || item.role === 'pelapor'); }).map(publicUser) : [] };
+    var accounts = allUsers();
+    return { status: 'success', data: reports().filter(function (item) { return canRead(item, user); }).map(function (item) { return publicReport(item, accounts); }), assignees: user.role === 'admin' ? accounts.filter(function (item) { return item.active && (item.role === 'petugas' || item.role === 'pelapor'); }).map(publicUser) : [] };
   }
   if (action === 'detail') {
     var detail = findReport(body.id, user);
