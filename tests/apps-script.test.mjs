@@ -156,3 +156,17 @@ test('authenticated requests create missing sheets and extend legacy summary hea
   f.context.ensureSchema();
   assert.equal(users.data[0].length, 9);
 });
+
+test('setup generates missing or short API key and preserves a valid key on rerun', () => {
+  const f = createFixture();
+  f.properties.delete('APP_API_KEY');
+  f.context.setupKomplainer();
+  const generated = f.properties.get('APP_API_KEY');
+  assert.match(generated, /^[a-f0-9]{64}$/);
+  f.context.setupKomplainer();
+  assert.equal(f.properties.get('APP_API_KEY'), generated);
+  f.properties.set('APP_API_KEY', 'short');
+  f.context.setupKomplainer();
+  assert.match(f.properties.get('APP_API_KEY'), /^[a-f0-9]{64}$/);
+  assert.notEqual(f.properties.get('APP_API_KEY'), generated);
+});

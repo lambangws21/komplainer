@@ -6,7 +6,7 @@ Versi ini membutuhkan aplikasi dan `docs/appscript.gs` yang diperbarui bersama. 
 
 1. Cadangkan spreadsheet sebelum migrasi.
 2. Salin isi `docs/appscript.gs` ke proyek Apps Script yang terhubung dengan spreadsheet Anda.
-3. Pada Project Settings → Script Properties, isi `APP_API_KEY` dengan kunci acak minimal 32 karakter. Untuk menghasilkan kunci di terminal:
+3. `setupKomplainer` otomatis membuat `APP_API_KEY` di Script Properties jika belum ada atau kurang dari 32 karakter. Setelah setup, salin key tersebut dari Project Settings → Script Properties ke `GOOGLE_SCRIPT_API_KEY` di Next.js/Vercel. Jika sudah memiliki key aplikasi, isi `APP_API_KEY` dengan nilai yang sama sebelum setup; key valid tidak direset. Untuk menghasilkan kunci sendiri di terminal:
 
    ```bash
    node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"

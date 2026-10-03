@@ -95,13 +95,17 @@ function seedInitialAdmin() {
   audit('', user, 'Admin awal dibuat');
 }
 function setupKomplainer() {
-  var key = props().getProperty('APP_API_KEY');
-  if (!key || key.length < 32) fail('Isi APP_API_KEY minimal 32 karakter di Script Properties.', 503);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     ensureSchema();
     seedInitialAdmin();
+    var key = props().getProperty('APP_API_KEY');
+    if (!key || key.trim().length < 32) {
+      key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+      props().setProperty('APP_API_KEY', key);
+    }
+    console.log('Setup selesai. Salin APP_API_KEY dari Project Settings > Script Properties ke GOOGLE_SCRIPT_API_KEY di Next.js/Vercel. Key valid dan akun yang sudah ada tidak direset.');
   } finally { lock.releaseLock(); }
 }
 function rows(sheet, width) { return sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues(); }
