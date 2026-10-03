@@ -30,6 +30,8 @@
 
 ## Prioritas fitur berikutnya
 
+Pembaruan: poin 1–3 di bawah telah diterapkan pada versi akun/workflow, dengan status tambahan Menunggu. Build production terbaru juga telah berhasil. Aktivasi backend dan akun mengikuti [setup-akun.md](setup-akun.md); pengujian pemasangan pada perangkat fisik masih diperlukan.
+
 1. Akun dan hak akses dengan autentikasi server: pelapor, petugas, admin. PIN klien bukan kontrol keamanan endpoint.
 2. Status penanganan terpisah dari tingkat keparahan: Baru, Diproses, Selesai; penanggung jawab dan tenggat.
 3. Riwayat tindak lanjut dan audit perubahan: siapa mengubah apa dan kapan.

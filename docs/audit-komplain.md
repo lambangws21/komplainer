@@ -1,5 +1,7 @@
 # Audit halaman komplain
 
+Catatan historis: temuan di bawah menggambarkan versi sebelum akun dan workflow. Autentikasi server, peran pengguna, sesi, dan otorisasi Apps Script kini telah diterapkan. Panduan aktivasi versi baru ada di [setup-akun.md](setup-akun.md). Laporan tanpa pemilik hanya dapat dilihat admin.
+
 Tanggal: 3 Oktober 2026. Cakupan: `src/app/komplain/page.jsx`, konfigurasi styling/lint terkait, dan pemeriksaan statis `src/app/api/komplain/route.js`.
 
 ## Temuan yang diperbaiki

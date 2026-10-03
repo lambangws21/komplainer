@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --test tests/*.test.mjs src/app/komplain/weekly-summary.test.mjs",
+    "setup:admin": "node scripts/setup-admin.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.0",

@@ -4,7 +4,9 @@ Aplikasi laporan komplain lapangan berbasis Next.js, dengan pencatatan tingkat k
 
 ## Fitur
 
-- Tambah, tinjau, edit, dan hapus laporan melalui Google Sheets / Google Apps Script.
+- Login dengan peran admin, petugas/PIC, dan pelapor; akses data diperiksa di server.
+- Penugasan PIC, tenggat, status penanganan, riwayat tindak lanjut, dan arsip laporan.
+- Pengelolaan akun serta penggantian password sementara pada login pertama.
 - Tabel desktop dan kartu pada ponsel, pencarian, filter, urutan tanggal, dan pagination.
 - Rekap Senin–Minggu: total, perbandingan minggu sebelumnya, distribusi harian, tingkat keparahan, dan tim terkait.
 - Manifest, ikon aplikasi, panduan pemasangan iOS/Android, dan halaman fallback offline.
@@ -21,11 +23,12 @@ Buat `.env.local` di root proyek, lalu isi URL deployment Web App Google Apps Sc
 
 ```dotenv
 GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+GOOGLE_SCRIPT_API_KEY=KUNCI_ACAK_MINIMAL_32_KARAKTER
 ```
 
 Nama lama `NEXT_PUBLIC_GOOGLE_SCRIPT_URL` tetap didukung sebagai fallback; gunakan `GOOGLE_SCRIPT_URL` untuk konfigurasi baru.
 
-Contoh skrip backend ada di [docs/appscript.gs](docs/appscript.gs). Sesuaikan deployment dan akses Google Sheets dengan kebutuhan tim.
+Ikuti [panduan aktivasi akun dan Apps Script](docs/setup-akun.md) sebelum menjalankan versi ini. Backend lama perlu diperbarui bersama aplikasi.
 
 ```bash
 npm run dev
@@ -37,8 +40,8 @@ Buka `http://localhost:3000`. Halaman root otomatis mengarah ke `/komplain`.
 
 ```bash
 npx tsc --noEmit --incremental false
-npx eslint src/app/komplain/*.jsx src/app/komplain/*.mjs src/app/manifest.ts src/app/layout.tsx next.config.ts tests/pwa.test.mjs
-node --test tests/pwa.test.mjs src/app/komplain/weekly-summary.test.mjs
+npm run lint
+npm test
 ```
 
 ## Environment di Vercel
@@ -47,7 +50,7 @@ File `.env.local` tidak dikirim ke GitHub dan tidak otomatis tersedia pada Verce
 
 1. Buka proyek Vercel → Settings → Environment Variables.
 2. Tambahkan `GOOGLE_SCRIPT_URL` dengan nilai URL Web App Google Apps Script yang berakhir `/exec`.
-3. Pilih Production dan Preview bila digunakan, lalu simpan.
+3. Tambahkan `GOOGLE_SCRIPT_API_KEY` yang sama dengan Script Property `APP_API_KEY`. Pilih Production dan Preview bila digunakan, lalu simpan.
 4. Deploy commit terbaru atau redeploy setelah menambahkan/mengubah variabel.
 
 Nilai URL diisikan tanpa tanda kutip. API mendukung nama lama `NEXT_PUBLIC_GOOGLE_SCRIPT_URL` juga. Jika keduanya tersedia, `GOOGLE_SCRIPT_URL` diprioritaskan.
@@ -69,7 +72,7 @@ Detail implementasi dan batas verifikasi: [docs/pwa-komplain.md](docs/pwa-kompla
 
 ## Catatan akses data
 
-PIN Data Master saat ini merupakan pembatas tampilan di browser. Endpoint API belum memiliki autentikasi server. Sebelum penggunaan dengan data operasional sensitif, tambahkan login, sesi, dan otorisasi server sesuai peran.
+PIN telah diganti dengan sesi cookie HttpOnly selama 8 jam. Password disimpan sebagai hash scrypt. Pelapor melihat laporannya sendiri, petugas melihat tugas dan laporannya, admin melihat seluruh laporan. Data lama tanpa pemilik hanya terlihat oleh admin. API key hanya digunakan di server; jangan gunakan nama `NEXT_PUBLIC_` untuk key tersebut.
 
 Temuan audit: [docs/audit-komplain.md](docs/audit-komplain.md).
 
