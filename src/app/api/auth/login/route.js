@@ -6,7 +6,7 @@ export async function POST(request) {
     assertSameOrigin(request);
     const body = await readBody(request);
     const email = String(body.email || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || typeof body.password !== 'string' || body.password.length > 128) throw new ApiError('Email atau password tidak valid.');
+    if ((email !== 'lambangws' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) || email.length > 254 || typeof body.password !== 'string' || body.password.length > 128) throw new ApiError('Email/username atau password tidak valid.');
     const credentials = await callScript('authLookup', { email }, false);
     // A dummy derivation avoids an immediate return for unknown accounts.
     const hash = credentials.passwordHash || `scrypt:${'0'.repeat(32)}:${'0'.repeat(128)}`;

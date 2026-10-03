@@ -43,6 +43,21 @@ try {
   assert.equal((await list.json()).data.length, 1);
   assert.equal((await request('/api/auth/logout', {})).status, 200);
   assert.equal((await request('/api/komplain')).status, 401);
+  if (process.env.TEST_INITIAL_ADMIN_PASSWORD) {
+    fixture.ss.getSheetByName('Pengguna').data.splice(1);
+    fixture.context.setupKomplainer();
+    const initialPassword = process.env.TEST_INITIAL_ADMIN_PASSWORD;
+    const initialLogin = await request('/api/auth/login', { email: 'lambangws', password: initialPassword });
+    assert.equal(initialLogin.status, 200);
+    assert.equal((await initialLogin.json()).user.mustChangePassword, true);
+    cookie = initialLogin.headers.get('set-cookie').split(';')[0];
+    assert.equal((await request('/api/komplain')).status, 403);
+    assert.equal((await request('/api/auth/password', { currentPassword: initialPassword, password })).status, 200);
+    assert.equal((await request('/api/auth/session')).status, 401);
+    assert.equal((await request('/api/auth/login', { email: 'lambangws', password: initialPassword })).status, 401);
+    assert.equal((await request('/api/auth/login', { email: 'lambangws', password })).status, 200);
+    console.log('Initial admin username and mandatory password change passed.');
+  }
   console.log('API integration passed: login, origin protection, secure session, create/list, logout revocation. No live Sheets used.');
 } finally {
   app.kill('SIGTERM');

@@ -13,7 +13,7 @@ Versi ini membutuhkan aplikasi dan `docs/appscript.gs` yang diperbarui bersama. 
    ```
 
 4. Jika proyek skrip tidak terikat ke spreadsheet, tambahkan `SPREADSHEET_ID`. Jika terdapat beberapa sheet dengan delapan kolom komplain yang sama, isi `COMPLAINT_SHEET_NAME` dengan nama sheet data yang benar.
-5. Jalankan `setupKomplainer` dari editor Apps Script dan berikan izin akses spreadsheet. Fungsi ini mempertahankan delapan kolom lama, menambahkan kolom workflow, serta membuat sheet `Pengguna`, `Sesi`, dan `Riwayat`. Header yang berbeda akan ditolak agar data tidak tertimpa.
+5. Jalankan `setupKomplainer` dari editor Apps Script dan berikan izin akses spreadsheet. Fungsi ini mempertahankan delapan kolom lama, menambahkan kolom workflow, serta membuat sheet `Pengguna`, `Sesi`, `Riwayat`, dan `Rekapan Mingguan` beserta header. Jika belum ada pengguna, akun admin awal `lambangws` dibuat dengan password awal yang telah ditentukan, disimpan sebagai hash scrypt. Header yang berbeda akan ditolak agar data tidak tertimpa.
 6. Perbarui deployment Web App ke versi skrip terbaru. Jalankan sebagai pemilik spreadsheet dan izinkan akses endpoint tanpa login Google agar server aplikasi dapat memanggilnya. Setiap permintaan data tetap membutuhkan API key dan sesi yang valid. Simpan URL `/exec`.
 
 Jangan bagikan spreadsheet kepada pengguna umum. Password hash dan sesi berada dalam sheet internal; hanya pengelola yang boleh mengakses spreadsheet langsung.
@@ -25,20 +25,13 @@ Isi `.env.local` (tidak masuk Git):
 ```dotenv
 GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 GOOGLE_SCRIPT_API_KEY=KUNCI_YANG_SAMA_DENGAN_APP_API_KEY
-BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-BOOTSTRAP_ADMIN_NAME=Administrator
-BOOTSTRAP_ADMIN_UNIT=Pusat
-BOOTSTRAP_ADMIN_PASSWORD=PASSWORD_UNIK_MINIMAL_12_KARAKTER
 ```
 
-Jalankan:
+Jalankan `setupKomplainer` dari editor Apps Script satu kali, lalu masuk ke aplikasi menggunakan username **lambangws** dan password awal yang Anda tentukan. Akun ini wajib mengganti password sebelum membuka data. Setelah itu buat akun tim melalui menu **Pengguna**. Password baru dan password akun lain tetap harus 12–128 karakter. Sampaikan password sementara secara pribadi; aplikasi belum mengirim email undangan.
 
-```bash
-npm ci
-npm run setup:admin
-```
+Setup aman dijalankan ulang: tidak mengganti password, mengaktifkan kembali akun, atau menambahkan admin awal jika pengguna sudah ada. Penanda `INITIAL_ADMIN_CREATED` mencegah akun awal dibuat ulang jika baris pengguna kemudian dihapus. Permintaan API yang sudah lolos pemeriksaan key juga membuat sheet/header yang belum ada, tetapi tidak membuat ulang akun awal. Header lama yang cocok dilengkapi; header/data yang berbeda ditolak agar tidak ditimpa. Rekap mingguan lama dengan enam kolom tetap dipertahankan.
 
-Setup hanya dapat membuat admin ketika sheet pengguna masih kosong. Setelah berhasil, hapus `BOOTSTRAP_ADMIN_PASSWORD` dari `.env.local`. Jangan masukkan variabel bootstrap ke Vercel. Masuk memakai akun yang baru dibuat, kemudian buat akun tim melalui menu **Pengguna**. Sampaikan password sementara secara pribadi; aplikasi belum mengirim email undangan. Akun baru wajib mengganti password sebelum mengakses laporan.
+Untuk instalasi khusus yang membutuhkan identitas admin berbeda, `npm run setup:admin` masih tersedia sebelum `setupKomplainer` membuat admin awal. Isi variabel `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD` (minimal 12 karakter), dan opsional `BOOTSTRAP_ADMIN_UNIT` di `.env.local`, lalu hapus password bootstrap setelah selesai. Jangan memasukkan variabel bootstrap ke Vercel.
 
 Pada Vercel → Settings → Environment Variables, isi `GOOGLE_SCRIPT_URL` dan `GOOGLE_SCRIPT_API_KEY`, lalu deploy ulang. API key tidak boleh memakai awalan `NEXT_PUBLIC_`. Perbarui Apps Script sebelum mengaktifkan deployment aplikasi baru. Uji login, tambah laporan, penugasan, dan penyelesaian dengan data uji sebelum digunakan tim.
 

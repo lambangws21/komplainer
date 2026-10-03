@@ -101,3 +101,58 @@ test('authentication lookup is throttled and invalid dates are rejected', () => 
   assert.equal(f.request({ action: 'authLookup', email: 'admin@example.test' }).code, 429);
   assert.equal(f.createReport(f.adminSession, { tanggal: '2026-02-30' }).code, 400);
 });
+
+test('setup creates every sheet and seeds initial admin once without resetting accounts', async () => {
+  const { verifyPassword } = await import('../src/lib/server/password.mjs');
+  const f = createFixture();
+  const users = f.ss.getSheetByName('Pengguna');
+  users.data.splice(1);
+  f.context.setupKomplainer();
+  for (const name of ['Pengguna', 'Sesi', 'Riwayat', 'Rekapan Mingguan']) assert.ok(f.ss.getSheetByName(name).data[0].length);
+  assert.equal(users.data[1][1], 'lambangws');
+  assert.equal(users.data[1][2], 'lambangws');
+  assert.equal(users.data[1][3], 'admin');
+  assert.equal(users.data[1][8], true);
+  assert.match(users.data[1][5], /^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/);
+  if (process.env.TEST_INITIAL_ADMIN_PASSWORD) {
+    assert.ok(await verifyPassword(process.env.TEST_INITIAL_ADMIN_PASSWORD, users.data[1][5]));
+    assert.ok(!users.data[1].includes(process.env.TEST_INITIAL_ADMIN_PASSWORD));
+  }
+  const lookup = f.request({ action: 'authLookup', email: 'LAMBANGWS' });
+  assert.equal(lookup.passwordHash, users.data[1][5]);
+  const session = f.login('lambangws', lookup.passwordHash);
+  assert.equal(f.request({ action: 'list', ...session }).code, 403);
+  users.data[1][5] = fakeHash;
+  users.data[1][8] = false;
+  f.context.setupKomplainer();
+  assert.equal(users.data.length, 2);
+  assert.equal(users.data[1][5], fakeHash);
+  assert.equal(users.data[1][8], false);
+  users.data.splice(1);
+  f.context.setupKomplainer();
+  assert.equal(users.data.length, 1);
+});
+
+test('authenticated requests create missing sheets and extend legacy summary headers without erasing rows', () => {
+  const f = createFixture();
+  const summary = f.ss.getSheetByName('Rekapan Mingguan');
+  summary.data[0] = summary.data[0].slice(0, 6);
+  const old = ['2026-09-28', 1, 0, 0, 1, 0];
+  summary.appendRow(old);
+  f.ss.getSheets().splice(f.ss.getSheets().findIndex((sheet) => sheet.name === 'Riwayat'), 1);
+  assert.equal(f.request({ action: 'session', ...f.adminSession }).status, 'success');
+  assert.ok(f.ss.getSheetByName('Riwayat'));
+  assert.equal(summary.data[0].length, 12);
+  assert.deepEqual(summary.data[1], old);
+  f.properties.set('COMPLAINT_SHEET_NAME', 'Komplain Baru');
+  f.context.ensureSchema();
+  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 19);
+  f.data.maxColumns = 8;
+  f.context.ensureHeaders(f.data);
+  assert.equal(f.data.maxColumns, 19);
+  const users = f.ss.getSheetByName('Pengguna');
+  users.data[0] = users.data[0].slice(0, 8);
+  users.data[1] = users.data[1].slice(0, 8);
+  f.context.ensureSchema();
+  assert.equal(users.data[0].length, 9);
+});

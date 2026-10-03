@@ -3,7 +3,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 class Sheet {
-  constructor(name, data = []) { this.name = name; this.data = data.map((row) => [...row]); }
+  constructor(name, data = []) { this.name = name; this.data = data.map((row) => [...row]); this.maxColumns = 26; }
+  getMaxColumns() { return this.maxColumns; }
+  insertColumnsAfter(position, count) { this.maxColumns += count; return this; }
   getName() { return this.name; }
   getLastRow() { return this.data.length; }
   getLastColumn() { return Math.max(0, ...this.data.map((row) => row.length)); }
@@ -50,7 +52,7 @@ export function createFixture({ legacyRows = [] } = {}) {
     ContentService: { MimeType: { JSON: 'application/json' }, createTextOutput: (text) => ({ text, setMimeType() { return this; } }) },
   });
   vm.runInContext(readFileSync(new URL('../../docs/appscript.gs', import.meta.url), 'utf8'), context);
-  context.setupKomplainer();
+  context.ensureSchema();
   const request = (body) => JSON.parse(context.doPost({ postData: { contents: JSON.stringify({ apiKey: fakeKey, ...body }) } }).text);
   function login(email, hash = fakeHash) {
     const sessionHash = createHash('sha256').update(randomUUID()).digest('hex');

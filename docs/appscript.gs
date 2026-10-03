@@ -13,6 +13,9 @@ var HISTORY_HEADERS = ['ID', 'Komplain ID', 'Tanggal', 'User ID', 'Nama', 'Aksi'
 var LEVELS = ['C1 - Critical', 'C2 - Major', 'C3 - Moderate', 'C4 - Minor'];
 var WORKFLOW = ['Baru', 'Diproses', 'Menunggu', 'Selesai'];
 var ROLES = ['pelapor', 'petugas', 'admin'];
+var SUMMARY_HEADERS = ['Tanggal Rekapan', 'Total Kasus Minggu Ini'].concat(LEVELS, ['Awal Minggu', 'Akhir Minggu', 'Baru', 'Diproses', 'Menunggu', 'Selesai']);
+// One-time initial password hash; never reset an existing account during setup.
+var INITIAL_ADMIN_HASH = 'scrypt:79ba41d40b7579ebcb1b33e905843ef8:aa25c5c093dfb3f1cd5cfe81cd1873f0030b2fabb3b2f88d5e2560125d465b5f85036be6327c2b3cfd7227f09bc45fba12f23d875a704da6986f44d272fab6d0';
 
 function fail(message, code) { var error = new Error(message); error.code = code || 400; throw error; }
 function props() { return PropertiesService.getScriptProperties(); }
@@ -32,7 +35,7 @@ function dataSheet() {
   var name = props().getProperty('COMPLAINT_SHEET_NAME');
   if (name) {
     var configured = ss.getSheetByName(name);
-    if (!configured) fail('Sheet komplain yang dikonfigurasi tidak ditemukan.', 503);
+    if (!configured) configured = ss.insertSheet(name);
     return configured;
   }
   var matches = ss.getSheets().filter(function (sheet) { return startsWithHeaders(sheet, LEGACY_HEADERS); });
@@ -43,6 +46,7 @@ function dataSheet() {
 }
 function ensureHeaders(sheet) {
   if (!sheet) sheet = dataSheet();
+  ensureColumnCapacity(sheet, HEADERS.length);
   if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   else {
     if (!startsWithHeaders(sheet, LEGACY_HEADERS)) fail('Delapan kolom awal tidak sesuai. Setup dibatalkan tanpa mengubah data.', 503);
@@ -55,15 +59,40 @@ function ensureHeaders(sheet) {
   sheet.setFrozenRows(1);
   return sheet;
 }
-function systemSheet(name, headers) {
+function ensureColumnCapacity(sheet, width) {
+  var available = sheet.getMaxColumns();
+  if (available < width) sheet.insertColumnsAfter(available, width - available);
+}
+function systemSheet(name, headers, legacyWidth) {
   var ss = spreadsheet();
   var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureColumnCapacity(sheet, headers.length);
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#E2E8F0');
     sheet.setFrozenRows(1);
-  } else if (!startsWithHeaders(sheet, headers)) fail('Header sheet ' + name + ' tidak sesuai.', 503);
+  } else {
+    var width = sheet.getLastColumn();
+    var minimum = legacyWidth || 1;
+    if (width < minimum || width > headers.length || !startsWithHeaders(sheet, headers.slice(0, width))) fail('Header sheet ' + name + ' tidak sesuai. Data tidak diubah.', 503);
+    if (width < headers.length) sheet.getRange(1, width + 1, 1, headers.length - width).setValues([headers.slice(width)]);
+  }
   return sheet;
+}
+function ensureSchema() {
+  ensureHeaders(dataSheet());
+  systemSheet('Pengguna', USER_HEADERS);
+  systemSheet('Sesi', SESSION_HEADERS);
+  systemSheet('Riwayat', HISTORY_HEADERS);
+  systemSheet('Rekapan Mingguan', SUMMARY_HEADERS, 6);
+}
+function seedInitialAdmin() {
+  if (props().getProperty('INITIAL_ADMIN_CREATED') === 'true') return;
+  if (allUsers().length > 0) { props().setProperty('INITIAL_ADMIN_CREATED', 'true'); return; }
+  var user = { id: 'USR-' + Utilities.getUuid(), nama: 'lambangws', email: 'lambangws', role: 'admin', unit: 'Pusat', passwordHash: INITIAL_ADMIN_HASH, active: true, mustChangePassword: true };
+  systemSheet('Pengguna', USER_HEADERS).appendRow([user.id, user.nama, user.email, user.role, user.unit, user.passwordHash, true, nowIso(), true]);
+  props().setProperty('INITIAL_ADMIN_CREATED', 'true');
+  audit('', user, 'Admin awal dibuat');
 }
 function setupKomplainer() {
   var key = props().getProperty('APP_API_KEY');
@@ -71,10 +100,8 @@ function setupKomplainer() {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    ensureHeaders(dataSheet());
-    systemSheet('Pengguna', USER_HEADERS);
-    systemSheet('Sesi', SESSION_HEADERS);
-    systemSheet('Riwayat', HISTORY_HEADERS);
+    ensureSchema();
+    seedInitialAdmin();
   } finally { lock.releaseLock(); }
 }
 function rows(sheet, width) { return sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues(); }
@@ -107,6 +134,10 @@ function emailField(value) {
   var email = textField(value, 'Email', true, 254).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail('Email tidak valid.');
   return email;
+}
+function loginField(value) {
+  var identifier = textField(value, 'Email atau username', true, 254).toLowerCase();
+  return identifier === 'lambangws' ? identifier : emailField(identifier);
 }
 function validHash(hash) { if (!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(String(hash))) fail('Hash password tidak valid.'); return hash; }
 function allUsers() {
@@ -179,6 +210,7 @@ function doPost(event) {
     if (typeof body.apiKey !== 'string' || body.apiKey !== secret) fail('Akses layanan tidak diizinkan.', 403);
     lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) fail('Layanan sedang sibuk. Coba lagi.', 503);
+    ensureSchema();
     return jsonResponse(handle(body));
   } catch (error) { return jsonResponse({ status: 'error', code: error.code || 500, message: error.code ? error.message : 'Layanan data gagal memproses permintaan. Periksa konfigurasi sheet.' }); }
   finally { if (lock && lock.hasLock()) lock.releaseLock(); }
@@ -191,13 +223,13 @@ function handle(body) {
     return createUser(body, null, true);
   }
   if (action === 'authLookup') {
-    var email = emailField(body.email);
+    var email = loginField(body.email);
     throttle(email);
     var account = allUsers().filter(function (user) { return user.email === email && user.active; })[0];
     return { status: 'success', passwordHash: account ? account.passwordHash : null };
   }
   if (action === 'login') {
-    var loginUser = allUsers().filter(function (user) { return user.email === emailField(body.email) && user.active && user.passwordHash === body.expectedHash; })[0];
+    var loginUser = allUsers().filter(function (user) { return user.email === loginField(body.email) && user.active && user.passwordHash === body.expectedHash; })[0];
     if (!loginUser) fail('Email atau password salah.', 401);
     if (!/^[a-f0-9]{64}$/.test(String(body.sessionHash))) fail('Token sesi tidak valid.');
     var expiry = new Date(body.expiresAt).getTime();
@@ -243,7 +275,7 @@ function handle(body) {
       if (target.role === 'admin' && target.active && (role !== 'admin' || !body.active) && all.filter(function (item) { return item.role === 'admin' && item.active; }).length === 1) fail('Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan perannya.', 409);
       // Active assigned cases must first be transferred to another PIC.
       if (target.role === 'petugas' && (!body.active || role !== 'petugas') && reports().some(function (item) { return item.picId === target.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik petugas ini sebelum mengubah aksesnya.', 409);
-      var newEmail = emailField(body.email);
+      var newEmail = target.email === 'lambangws' ? loginField(body.email) : emailField(body.email);
       if (all.some(function (item) { return item.email === newEmail && item.id !== target.id; })) fail('Email sudah terdaftar.', 409);
       sheet.getRange(target.row, 2, 1, 4).setValues([safeRow([textField(body.nama, 'Nama', true), newEmail, role, textField(body.unit, 'Unit', true)])]);
       sheet.getRange(target.row, 7).setValue(body.active);
@@ -335,10 +367,8 @@ function generateWeeklySummary() {
     var sunday = new Date(monday.getTime() + 6 * 86400000);
     var end = sunday.toISOString().slice(0, 10);
     var selected = reports().filter(function (item) { return item.tanggal >= start && item.tanggal <= end; });
-    var summaryHeaders = ['Tanggal Rekapan', 'Total Kasus Minggu Ini'].concat(LEVELS, ['Awal Minggu', 'Akhir Minggu', 'Baru', 'Diproses', 'Menunggu', 'Selesai']);
-    var summary = spreadsheet().getSheetByName('Rekapan Mingguan') || spreadsheet().insertSheet('Rekapan Mingguan');
-    if (summary.getLastRow() > 0 && !startsWithHeaders(summary, summaryHeaders.slice(0, 6))) fail('Header Rekapan Mingguan tidak sesuai.', 503);
-    summary.getRange(1, 1, 1, summaryHeaders.length).setValues([summaryHeaders]);
+    var summaryHeaders = SUMMARY_HEADERS;
+    var summary = systemSheet('Rekapan Mingguan', summaryHeaders, 6);
     var values = [today, selected.length].concat(LEVELS.map(function (level) { return selected.filter(function (item) { return item.status === level; }).length; }), [start, end], WORKFLOW.map(function (status) { return selected.filter(function (item) { return item.statusPenanganan === status; }).length; }));
     var existing = rows(summary, summaryHeaders.length).findIndex(function (row) { return dateText(row[6]) === start; });
     if (existing >= 0) summary.getRange(existing + 2, 1, 1, values.length).setValues([values]);
