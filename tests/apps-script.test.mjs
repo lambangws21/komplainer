@@ -170,3 +170,32 @@ test('setup generates missing or short API key and preserves a valid key on reru
   assert.match(f.properties.get('APP_API_KEY'), /^[a-f0-9]{64}$/);
   assert.notEqual(f.properties.get('APP_API_KEY'), generated);
 });
+
+test('admin delegates a case to a reporter without granting global access or changing role', async () => {
+  const { canFollowUp } = await import('../src/app/komplain/workflow.mjs');
+  const f = createFixture();
+  const owner = f.addUser('owner@example.test');
+  const delegate = f.addUser('delegate@example.test');
+  const other = f.addUser('other@example.test');
+  let item = f.createReport(owner).data;
+  const unrelated = f.createReport(owner).data;
+  assert.equal(f.request({ action: 'list', ...delegate }).data.length, 0);
+  assert.ok(f.request({ action: 'list', ...f.adminSession }).assignees.some((user) => user.id === delegate.user.id));
+  assert.equal(f.request({ action: 'assign', ...delegate, id: item.id, version: 1, picId: delegate.user.id }).code, 404);
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: 1, picId: delegate.user.id }).data;
+  assert.equal(f.request({ action: 'session', ...delegate }).user.role, 'pelapor');
+  assert.equal(f.request({ action: 'list', ...delegate }).data.length, 1);
+  assert.equal(f.request({ action: 'detail', ...delegate, id: unrelated.id }).code, 404);
+  assert.equal(f.request({ action: 'followUp', ...owner, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Bukan PIC' }).code, 403);
+  assert.equal(canFollowUp(item, delegate.user), true);
+  assert.equal(canFollowUp(item, other.user), false);
+  assert.equal(f.request({ action: 'followUp', ...other, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Tidak berwenang' }).code, 404);
+  assert.equal(f.request({ action: 'updateUser', ...f.adminSession, ...delegate.user, active: false }).code, 409);
+  item = f.request({ action: 'followUp', ...delegate, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Diperiksa' }).data;
+  assert.equal(item.statusPenanganan, 'Diproses');
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: other.user.id }).data;
+  assert.equal(f.request({ action: 'detail', ...delegate, id: item.id }).code, 404);
+  assert.equal(f.request({ action: 'followUp', ...delegate, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 404);
+  item = f.request({ action: 'followUp', ...other, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Sudah diperbaiki', catatan: 'Selesai' }).data;
+  assert.equal(item.statusPenanganan, 'Selesai');
+});

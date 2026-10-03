@@ -74,7 +74,7 @@ Detail implementasi dan batas verifikasi: [docs/pwa-komplain.md](docs/pwa-kompla
 
 ## Catatan akses data
 
-PIN telah diganti dengan sesi cookie HttpOnly selama 8 jam. Password disimpan sebagai hash scrypt. Pelapor melihat laporannya sendiri, petugas melihat tugas dan laporannya, admin melihat seluruh laporan. Data lama tanpa pemilik hanya terlihat oleh admin. API key hanya digunakan di server; jangan gunakan nama `NEXT_PUBLIC_` untuk key tersebut.
+PIN telah diganti dengan sesi cookie HttpOnly selama 8 jam. Password disimpan sebagai hash scrypt. Pelapor dan petugas melihat laporan sendiri serta kasus yang ditugaskan kepadanya sebagai PIC; admin melihat seluruh laporan. Delegasi PIC tidak mengubah peran akun. Data lama tanpa pemilik hanya terlihat oleh admin. API key hanya digunakan di server; jangan gunakan nama `NEXT_PUBLIC_` untuk key tersebut.
 
 Temuan audit: [docs/audit-komplain.md](docs/audit-komplain.md).
 

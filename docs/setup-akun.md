@@ -39,7 +39,7 @@ Pada Vercel → Settings → Environment Variables, isi `GOOGLE_SCRIPT_URL` dan 
 
 | Peran | Akses |
 | --- | --- |
-| Pelapor | Membuat laporan, melihat laporan sendiri, mengedit ketika status Baru, membuka kembali laporan sendiri yang selesai |
+| Pelapor | Membuat dan melihat laporan sendiri, mengedit ketika status Baru, membuka kembali laporan sendiri yang selesai; melihat dan menindaklanjuti kasus yang didelegasikan admin kepadanya sebagai PIC |
 | Petugas/PIC | Akses pelapor, ditambah melihat dan menindaklanjuti laporan yang ditugaskan kepadanya |
 | Admin | Semua laporan, penugasan PIC dan tenggat, tindak lanjut, arsip, serta pengelolaan akun |
 
@@ -47,7 +47,7 @@ Status penanganan: **Baru → Diproses / Menunggu → Selesai**. Tingkat C1–C4
 
 Laporan lama tanpa ID pelapor terlihat oleh admin saja. Skrip tidak menebak pemilik dari nama dokter atau tim. Rekap UI mengikuti lingkup akses pengguna dan tanggal kejadian. `generateWeeklySummary` merekap minggu lengkap sebelumnya (Senin–Minggu), memakai zona waktu spreadsheet dan status laporan saat rekap dijalankan; bukan snapshot historis status pada akhir minggu.
 
-Sesi berlaku 8 jam. Menonaktifkan akun, mengganti peran, atau reset password membatalkan sesi akun terkait. Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan perannya. Petugas dengan tugas belum selesai perlu dialihkan tugasnya sebelum dinonaktifkan atau berganti peran.
+Sesi berlaku 8 jam. Menonaktifkan akun, mengganti peran, atau reset password membatalkan sesi akun terkait. Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan perannya. Pengguna dengan tugas belum selesai perlu dialihkan tugasnya sebelum dinonaktifkan atau berganti peran. Admin dapat menunjuk Pelapor atau Petugas aktif sebagai PIC per kasus. Delegasi tidak mengubah peran akun dan tidak memberi akses ke seluruh laporan. Setelah penugasan dialihkan, akses PIC lama dicabut; akses sebagai pemilik laporan tetap berlaku.
 
 ## Batas versi ini
 

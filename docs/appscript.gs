@@ -179,7 +179,7 @@ function report(row, index) {
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
 function publicReport(item) { var result = Object.assign({}, item); delete result.row; return result; }
-function canRead(item, user) { return user.role === 'admin' || item.pelaporId === user.id || (user.role === 'petugas' && item.picId === user.id); }
+function canRead(item, user) { return user.role === 'admin' || item.pelaporId === user.id || item.picId === user.id; }
 function findReport(id, user) {
   var item = reports().filter(function (value) { return value.id === String(id); })[0];
   if (!item || !canRead(item, user)) fail('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
@@ -278,7 +278,7 @@ function handle(body) {
       if (ROLES.indexOf(role) === -1 || typeof body.active !== 'boolean') fail('Peran atau status akun tidak valid.');
       if (target.role === 'admin' && target.active && (role !== 'admin' || !body.active) && all.filter(function (item) { return item.role === 'admin' && item.active; }).length === 1) fail('Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan perannya.', 409);
       // Active assigned cases must first be transferred to another PIC.
-      if (target.role === 'petugas' && (!body.active || role !== 'petugas') && reports().some(function (item) { return item.picId === target.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik petugas ini sebelum mengubah aksesnya.', 409);
+      if ((!body.active || role !== target.role) && reports().some(function (item) { return item.picId === target.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
       var newEmail = target.email === 'lambangws' ? loginField(body.email) : emailField(body.email);
       if (all.some(function (item) { return item.email === newEmail && item.id !== target.id; })) fail('Email sudah terdaftar.', 409);
       sheet.getRange(target.row, 2, 1, 4).setValues([safeRow([textField(body.nama, 'Nama', true), newEmail, role, textField(body.unit, 'Unit', true)])]);
@@ -289,7 +289,7 @@ function handle(body) {
     return { status: 'success' };
   }
   if (action === 'list') {
-    return { status: 'success', data: reports().filter(function (item) { return canRead(item, user); }).map(publicReport), assignees: user.role === 'admin' ? allUsers().filter(function (item) { return item.active && item.role === 'petugas'; }).map(publicUser) : [] };
+    return { status: 'success', data: reports().filter(function (item) { return canRead(item, user); }).map(publicReport), assignees: user.role === 'admin' ? allUsers().filter(function (item) { return item.active && (item.role === 'petugas' || item.role === 'pelapor'); }).map(publicUser) : [] };
   }
   if (action === 'detail') {
     var detail = findReport(body.id, user);
@@ -331,14 +331,14 @@ function handle(body) {
   } else if (action === 'assign') {
     requireAdmin(user);
     if (item.statusPenanganan === 'Selesai') fail('Buka kembali laporan sebelum mengubah penugasan.', 409);
-    var pic = allUsers().filter(function (target) { return target.id === body.picId && target.role === 'petugas' && target.active; })[0];
-    if (body.picId && !pic) fail('PIC harus merupakan petugas aktif.');
+    var pic = allUsers().filter(function (target) { return target.id === body.picId && (target.role === 'petugas' || target.role === 'pelapor') && target.active; })[0];
+    if (body.picId && !pic) fail('PIC harus merupakan petugas atau pelapor aktif.');
     item.picId = pic ? pic.id : '';
     item.picNama = pic ? pic.nama : '';
     item.tenggat = validDate(body.tenggat, true);
     if (item.statusPenanganan !== 'Baru' && !pic) fail('Laporan yang sedang ditangani harus memiliki PIC.');
   } else if (action === 'followUp') {
-    if (user.role !== 'admin' && !(user.role === 'petugas' && item.picId === user.id)) fail('Hanya admin atau PIC dapat memperbarui penanganan.', 403);
+    if (user.role !== 'admin' && item.picId !== user.id) fail('Hanya admin atau PIC dapat memperbarui penanganan.', 403);
     if (item.statusPenanganan === 'Selesai') fail('Laporan sudah selesai. Gunakan Buka kembali untuk melanjutkan.', 409);
     if (['Diproses', 'Menunggu', 'Selesai'].indexOf(body.statusPenanganan) === -1) fail('Status penanganan tidak valid.');
     if (!item.picId) fail('Tentukan PIC sebelum memperbarui penanganan.');
