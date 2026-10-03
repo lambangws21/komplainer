@@ -36,6 +36,8 @@ npm run dev
 
 Buka `http://localhost:3000`. Halaman root otomatis mengarah ke `/komplain`.
 
+Output development disimpan di `.next-dev`, sedangkan build/start production memakai `.next`, melalui konfigurasi [distDir Next.js](https://nextjs.org/docs/app/api-reference/config/next-config-js/distDir). Pemisahan ini mencegah build production menimpa chunk development ketika kedua proses berjalan.
+
 ## Pemeriksaan
 
 ```bash
