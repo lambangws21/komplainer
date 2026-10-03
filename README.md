@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# komplainer
 
-## Getting Started
+Aplikasi laporan komplain lapangan berbasis Next.js, dengan pencatatan tingkat keparahan C1–C4, Data Master, rekap mingguan, dan dukungan pemasangan sebagai PWA.
 
-First, run the development server:
+## Fitur
+
+- Tambah, tinjau, edit, dan hapus laporan melalui Google Sheets / Google Apps Script.
+- Tabel desktop dan kartu pada ponsel, pencarian, filter, urutan tanggal, dan pagination.
+- Rekap Senin–Minggu: total, perbandingan minggu sebelumnya, distribusi harian, tingkat keparahan, dan tim terkait.
+- Manifest, ikon aplikasi, panduan pemasangan iOS/Android, dan halaman fallback offline.
+
+## Menjalankan lokal
+
+Gunakan Node.js 20 atau lebih baru.
+
+```bash
+npm ci
+```
+
+Buat `.env.local` di root proyek, lalu isi URL deployment Web App Google Apps Script:
+
+```dotenv
+NEXT_PUBLIC_GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+```
+
+Contoh skrip backend ada di [docs/appscript.gs](docs/appscript.gs). Sesuaikan deployment dan akses Google Sheets dengan kebutuhan tim.
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka `http://localhost:3000`. Halaman root otomatis mengarah ke `/komplain`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Pemeriksaan
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx tsc --noEmit --incremental false
+npx eslint src/app/komplain/*.jsx src/app/komplain/*.mjs src/app/manifest.ts src/app/layout.tsx next.config.ts tests/pwa.test.mjs
+node --test tests/pwa.test.mjs src/app/komplain/weekly-summary.test.mjs
+```
 
-## Learn More
+## Build dan PWA
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+npm run start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Build membutuhkan akses Google Fonts untuk Geist/Geist Mono pada layout. Publikasikan aplikasi menggunakan HTTPS agar dapat dipasang di perangkat pengguna. Service worker hanya didaftarkan pada mode production.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Android: buka di Chrome, gunakan tombol Instal aplikasi atau menu browser.
+- iOS: buka di Safari → Bagikan → Tambahkan ke Layar Utama.
+- Membaca dan menyimpan laporan tetap membutuhkan internet. Cache hanya memuat aset umum dan halaman fallback offline.
 
-## Deploy on Vercel
+Detail implementasi dan batas verifikasi: [docs/pwa-komplain.md](docs/pwa-komplain.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Catatan akses data
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+PIN Data Master saat ini merupakan pembatas tampilan di browser. Endpoint API belum memiliki autentikasi server. Sebelum penggunaan dengan data operasional sensitif, tambahkan login, sesi, dan otorisasi server sesuai peran.
+
+Temuan audit: [docs/audit-komplain.md](docs/audit-komplain.md).
+
+File `.env.local`, `node_modules`, dan hasil build diabaikan oleh Git.
