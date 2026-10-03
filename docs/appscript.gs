@@ -304,7 +304,7 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
-    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), team: user.role === 'admin' ? textField(body.team, 'Tim / unit', true) : user.unit, tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
+    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), team: textField(body.team, 'Tim / unit', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
     if (LEVELS.indexOf(created.status) === -1) fail('Tingkat keparahan tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
@@ -319,7 +319,7 @@ function handle(body) {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
     item.tanggal = validDate(body.tanggal);
     item.dokter = textField(body.dokter, 'Dokter', true);
-    item.team = user.role === 'admin' ? textField(body.team, 'Tim', true) : user.unit;
+    item.team = textField(body.team, 'Tim / unit', true);
     item.tindakan = textField(body.tindakan, 'Tindakan', true, 500);
     item.komplain = textField(body.komplain, 'Masalah', true, 5000);
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);

@@ -79,12 +79,12 @@ test('create retry is idempotent and spreadsheet formulas are escaped; archive p
   const f = createFixture();
   const reporter = f.addUser('reporter@example.test');
   const requestId = randomUUID();
-  const body = { requestId, komplain: '=IMPORTXML("https://example.test", "//x")', team: 'forged unit', statusPenanganan: 'Selesai', pelaporId: f.admin.id };
+  const body = { requestId, komplain: '=IMPORTXML("https://example.test", "//x")', team: 'Unit B', statusPenanganan: 'Selesai', pelaporId: f.admin.id };
   const first = f.createReport(reporter, body).data;
   const second = f.createReport(reporter, body).data;
   assert.equal(first.id, second.id);
   assert.equal(f.request({ action: 'list', ...reporter }).data.length, 1);
-  assert.equal(first.team, reporter.user.unit);
+  assert.equal(first.team, 'Unit B');
   assert.equal(first.statusPenanganan, 'Baru');
   assert.equal(first.pelaporId, reporter.user.id);
   assert.ok(f.data.data[1][5].startsWith("'="));
@@ -198,4 +198,20 @@ test('admin delegates a case to a reporter without granting global access or cha
   assert.equal(f.request({ action: 'followUp', ...delegate, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 404);
   item = f.request({ action: 'followUp', ...other, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Sudah diperbaiki', catatan: 'Selesai' }).data;
   assert.equal(item.statusPenanganan, 'Selesai');
+});
+
+
+test('reporter can set and edit a report team without changing account unit or access', () => {
+  const f = createFixture();
+  const reporter = f.addUser('reporter@example.test');
+  const other = f.addUser('other@example.test');
+  assert.equal(f.createReport(reporter, { team: '   ' }).code, 400);
+  assert.equal(f.createReport(reporter, { team: 'x'.repeat(201) }).code, 400);
+  let item = f.createReport(reporter, { team: '  Unit Baru  ' }).data;
+  assert.equal(item.team, 'Unit Baru');
+  item = f.request({ action: 'update', ...reporter, ...item, team: 'Unit Revisi' }).data;
+  assert.equal(item.team, 'Unit Revisi');
+  assert.equal(f.request({ action: 'session', ...reporter }).user.unit, 'Unit A');
+  assert.equal(f.request({ action: 'list', ...other }).data.length, 0);
+  assert.equal(f.request({ action: 'update', ...other, ...item, team: 'Unit Lain' }).code, 404);
 });

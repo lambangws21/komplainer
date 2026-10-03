@@ -43,6 +43,8 @@ Pada Vercel → Settings → Environment Variables, isi `GOOGLE_SCRIPT_URL` dan 
 | Petugas/PIC | Akses pelapor, ditambah melihat dan menindaklanjuti laporan yang ditugaskan kepadanya |
 | Admin | Semua laporan, penugasan PIC dan tenggat, tindak lanjut, arsip, serta pengelolaan akun |
 
+Kolom Tim / unit pada laporan dapat diisi atau diedit oleh pengguna yang berhak membuat/mengedit laporan. Nilai awal mengikuti unit akun, tetapi perubahan hanya berlaku pada laporan tersebut; tidak mengubah unit akun maupun hak akses data.
+
 Status penanganan: **Baru → Diproses / Menunggu → Selesai**. Tingkat C1–C4 tetap terpisah dari status penanganan. Penyelesaian membutuhkan PIC, catatan tindak lanjut, dan solusi. Riwayat mencatat aktor dan waktu perubahan. Arsip menyembunyikan laporan tanpa menghapus baris atau riwayat. Nomor versi menolak perubahan bersamaan yang sudah kedaluwarsa; muat ulang data sebelum mencoba lagi.
 
 Laporan lama tanpa ID pelapor terlihat oleh admin saja. Skrip tidak menebak pemilik dari nama dokter atau tim. Rekap UI mengikuti lingkup akses pengguna dan tanggal kejadian. `generateWeeklySummary` merekap minggu lengkap sebelumnya (Senin–Minggu), memakai zona waktu spreadsheet dan status laporan saat rekap dijalankan; bukan snapshot historis status pada akhir minggu.
