@@ -29,11 +29,11 @@ GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 GOOGLE_SCRIPT_API_KEY=KUNCI_YANG_SAMA_DENGAN_APP_API_KEY
 ```
 
-Jalankan `setupKomplainer` dari editor Apps Script satu kali, lalu masuk ke aplikasi menggunakan username **lambangws** dan password awal yang Anda tentukan. Akun ini wajib mengganti password sebelum membuka data. Setelah itu buat akun tim melalui menu **Pengguna**. Password baru dan password akun lain tetap harus 12–128 karakter. Sampaikan password sementara secara pribadi; aplikasi belum mengirim email undangan.
+Jalankan `setupKomplainer` dari editor Apps Script satu kali, lalu masuk ke aplikasi menggunakan username **lambangws** dan password awal yang Anda tentukan. Akun ini wajib mengganti password sebelum membuka data. Setelah itu buat akun tim melalui menu **Pengguna**. Password baru dan password akun lain tetap harus 6–128 karakter. Sampaikan password sementara secara pribadi; aplikasi belum mengirim email undangan.
 
 Setup aman dijalankan ulang: tidak mengganti password, mengaktifkan kembali akun, atau menambahkan admin awal jika pengguna sudah ada. Penanda `INITIAL_ADMIN_CREATED` mencegah akun awal dibuat ulang jika baris pengguna kemudian dihapus. Permintaan API yang sudah lolos pemeriksaan key juga membuat sheet/header yang belum ada, tetapi tidak membuat ulang akun awal. Header lama yang cocok dilengkapi; header/data yang berbeda ditolak agar tidak ditimpa. Rekap mingguan lama dengan enam kolom tetap dipertahankan.
 
-Untuk instalasi khusus yang membutuhkan identitas admin berbeda, `npm run setup:admin` masih tersedia sebelum `setupKomplainer` membuat admin awal. Isi variabel `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD` (minimal 12 karakter), dan opsional `BOOTSTRAP_ADMIN_UNIT` di `.env.local`, lalu hapus password bootstrap setelah selesai. Jangan memasukkan variabel bootstrap ke Vercel.
+Untuk instalasi khusus yang membutuhkan identitas admin berbeda, `npm run setup:admin` masih tersedia sebelum `setupKomplainer` membuat admin awal. Isi variabel `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD` (minimal 6 karakter), dan opsional `BOOTSTRAP_ADMIN_UNIT` di `.env.local`, lalu hapus password bootstrap setelah selesai. Jangan memasukkan variabel bootstrap ke Vercel.
 
 Pada Vercel → Settings → Environment Variables, isi `GOOGLE_SCRIPT_URL` dan `GOOGLE_SCRIPT_API_KEY`, lalu deploy ulang. API key tidak boleh memakai awalan `NEXT_PUBLIC_`. Perbarui Apps Script sebelum mengaktifkan deployment aplikasi baru. Uji login, tambah laporan, penugasan, dan penyelesaian dengan data uji sebelum digunakan tim.
 

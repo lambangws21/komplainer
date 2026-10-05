@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 const scrypt = promisify(derive);
 export const SESSION_SECONDS = 8 * 60 * 60;
 export function validatePassword(password) {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128) throw new Error('Password harus terdiri dari 12–128 karakter.');
+  if (typeof password !== 'string' || password.length < 6 || password.length > 128) throw new Error('Password harus terdiri dari 6–128 karakter.');
 }
 export async function hashPassword(password) {
   validatePassword(password);
