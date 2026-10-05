@@ -12,7 +12,7 @@ export async function POST(request) {
   try {
     assertSameOrigin(request);
     const body = await readBody(request);
-    if (!['createUser', 'updateUser', 'resetPassword'].includes(body.action)) throw new ApiError('Aksi akun tidak valid.');
+    if (!['createUser', 'updateUser', 'resetPassword', 'approveUser', 'rejectUser'].includes(body.action)) throw new ApiError('Aksi akun tidak valid.');
     const user = usesFirebase() ? await currentFirebaseUser() : (await callScript('session')).user;
     if (user.role !== 'admin' || user.mustChangePassword) throw new ApiError('Hanya admin dapat mengelola akun.', 403);
     const payload = { id: body.id, nama: body.nama, email: body.email, role: body.role, unit: body.unit, active: body.active };
@@ -24,7 +24,7 @@ export async function POST(request) {
         const unit = accountText(body.unit, 'Team Pelapor');
         if (!['admin', 'pelapor', 'petugas'].includes(body.role)) throw new ApiError('Peran tidak valid.');
         const id = `USR-${randomUUID()}`;
-        const metadata = { role: body.role, unit, active: true, mustChangePassword: true };
+        const metadata = { role: body.role, unit, active: true, approval: 'approved', mustChangePassword: true };
         const claims = appClaims({}, metadata);
         let account;
         try { account = await auth.createUser({ uid: firebaseUid(id), email: firebaseEmail(body.email), password: body.password, displayName: nama, disabled: true }); }
@@ -36,6 +36,12 @@ export async function POST(request) {
       const accounts = await firebaseDirectory();
       const target = accounts.find((item) => item.id === body.id);
       if (!target) throw new ApiError('Akun tidak ditemukan.', 404);
+      if (['approveUser', 'rejectUser'].includes(body.action)) {
+        if (!['pending', 'rejected'].includes(target.approval)) throw new ApiError('Pendaftaran sudah diproses. Muat ulang daftar.', 409);
+        await writeFirebaseMetadata(target.firebaseUid, { approval: body.action === 'approveUser' ? 'approved' : 'rejected', role: 'pelapor', active: true, approvedBy: user.firebaseUid });
+        return json({ status: 'success' });
+      }
+      if (target.approval !== 'approved') throw new ApiError('Setujui pendaftaran terlebih dahulu sebelum mengubah akun.', 409);
       if (body.action === 'resetPassword') {
         try { validatePassword(body.password); } catch (error) { throw new ApiError(error.message); }
         // Gate the temporary password before changing Firebase credentials.

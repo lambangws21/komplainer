@@ -2,7 +2,7 @@
 
 Login, password, sesi, nama, email, peran, Team Pelapor, status aktif, dan kewajiban mengganti password dikelola di Firebase Authentication. Metadata khusus aplikasi disimpan pada custom claims `komplainer`; klaim aplikasi lain dipertahankan. Firestore tidak diperlukan. Server membaca profil Firebase terbaru setiap permintaan agar perubahan peran/status langsung berlaku.
 
-Admin yang dipilih: **zakzav@trial.com**, ditetapkan melalui `FIREBASE_ADMIN_UID`. Password akun Firebase yang sudah ada tidak diubah. Akun Firebase lain mendapat profil Pelapor ketika pertama login. Profil mendapat ID Komplainer yang stabil berdasarkan UID; UID hasil migrasi `komplainer:USR-...` mempertahankan ID lama.
+Admin yang dipilih: **zakzav@trial.com**, ditetapkan melalui `FIREBASE_ADMIN_UID`. Password akun Firebase yang sudah ada tidak diubah. Akun Firebase baru yang belum memiliki profil Komplainer mendapat peran Pelapor dengan status menunggu persetujuan Admin. Akun yang sudah aktif sebelumnya tetap aktif. Profil mendapat ID Komplainer yang stabil berdasarkan UID; UID hasil migrasi `komplainer:USR-...` mempertahankan ID lama.
 
 ## Environment server
 
@@ -41,3 +41,13 @@ Login dan menu Pengguna tidak bergantung pada Apps Script. Jika Apps Script belu
 Label Team/Unit menjadi **Team Pelapor**. Key API `team` dan header historis `Team` dipertahankan agar data lama tidak bergeser.
 
 Referensi: [Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims), [session cookies](https://firebase.google.com/docs/auth/admin/manage-cookies).
+
+## Pendaftaran mandiri dan persetujuan
+
+- Pada layar masuk, pilih **Belum punya akun? Daftar Pelapor**. Isi nama, email, Team Pelapor, password minimal 6 karakter, dan konfirmasi password.
+- Akun disimpan di Firebase Authentication dengan custom claims `approval: pending` dan peran `pelapor`. Role/approval dari request browser tidak dipercaya.
+- Pelapor dapat masuk untuk melihat status pendaftaran, tetapi API data dan menu pengguna diblokir sampai status `approved`.
+- Admin membuka **Pengguna → Menunggu persetujuan**, lalu memilih **Setujui sebagai Pelapor** atau **Tolak pendaftaran**. Akun yang ditolak tetap tidak dapat mengakses data dan dapat ditinjau ulang Admin.
+- Pelapor menekan **Periksa status persetujuan** untuk membuka laporan setelah persetujuan. Status dibaca dari profil Firebase terbaru; token lama tidak dapat melewati aturan persetujuan.
+- Akun yang dibuat langsung oleh Admin mendapat persetujuan otomatis dan tetap wajib mengganti password sementara.
+- Signup menggunakan Firebase Auth REST API sehingga pembatasan pendaftaran Firebase tetap berlaku. Aplikasi tidak mengirim email persetujuan secara otomatis.

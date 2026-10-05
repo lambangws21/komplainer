@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { profileId, profileFromAccount, appClaims, assertAccountChange } from '../src/lib/server/firebase-profile.mjs';
+import { profileId, profileFromAccount, appClaims, assertAccountChange, registrationMetadata, requireApprovedProfile } from '../src/lib/server/firebase-profile.mjs';
 import { createFixture } from './helpers/apps-script-fixture.mjs';
 
 test('Firebase profiles use stable IDs and only application-scoped roles', () => {
@@ -20,6 +20,27 @@ test('configured admin and last active admin cannot lose access', () => {
   const target = { id: 'USR-a', firebaseUid: 'selected-admin', role: 'admin', active: true };
   assert.throws(() => assertAccountChange(target, { role: 'pelapor', active: true }, [target], 'selected-admin'), { code: 409 });
   assert.throws(() => assertAccountChange(target, { role: 'admin', active: false }, [target], 'other'), { code: 409 });
+});
+
+test('self-registered reporters cannot access data until approval; rejection and disabling remain blocked', () => {
+  const account = { uid: 'self-register', email: 'new@example.test', displayName: 'New User', customClaims: appClaims({}, registrationMetadata('Team A')) };
+  const pending = profileFromAccount(account);
+  assert.equal(pending.role, 'pelapor');
+  assert.equal(pending.approval, 'pending');
+  assert.equal(pending.active, false);
+  assert.throws(() => requireApprovedProfile(pending), { code: 403 });
+  account.customClaims.komplainer.approval = 'approved';
+  assert.equal(requireApprovedProfile(profileFromAccount(account)).active, true);
+  account.customClaims.komplainer.approval = 'rejected';
+  assert.throws(() => requireApprovedProfile(profileFromAccount(account)), { code: 403 });
+  account.customClaims.komplainer.approval = 'approved';
+  account.disabled = true;
+  assert.throws(() => requireApprovedProfile(profileFromAccount(account)), { code: 403 });
+});
+
+test('previously approved profiles remain approved when legacy metadata has no approval field', () => {
+  const account = { uid: 'old-account', customClaims: appClaims({}, { role: 'pelapor', unit: 'Team A', active: true }) };
+  assert.equal(requireApprovedProfile(profileFromAccount(account)).approval, 'approved');
 });
 
 test('data-only Apps Script uses verified server context and does not create account/session sheets', () => {

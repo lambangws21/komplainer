@@ -19,13 +19,15 @@ export function firebaseAuth() {
     return getAuth(initializeApp({ credential: cert(account), projectId: account.project_id }, 'komplainer'));
   } catch { throw new ApiError('Konfigurasi Firebase Admin belum valid. Periksa kredensial server.', 503); }
 }
-export async function firebasePasswordLogin(email, password) {
+export async function firebasePasswordLogin(email, password) { return firebasePasswordRequest('signInWithPassword', email, password); }
+export async function firebasePasswordRegister(email, password, displayName) { return firebasePasswordRequest('signUp', email, password, displayName); }
+async function firebasePasswordRequest(method, email, password, displayName) {
   if (!process.env.FIREBASE_WEB_API_KEY) throw new ApiError('FIREBASE_WEB_API_KEY belum dikonfigurasi.', 503);
   let response;
   try {
-    response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(process.env.FIREBASE_WEB_API_KEY)}`, {
+    response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:${method}?key=${encodeURIComponent(process.env.FIREBASE_WEB_API_KEY)}`, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: firebaseEmail(email), password, returnSecureToken: true }),
+      body: JSON.stringify({ email: firebaseEmail(email), password, ...(displayName ? { displayName } : {}), returnSecureToken: true }),
       signal: AbortSignal.timeout(15000),
     });
   } catch { throw new ApiError('Layanan login Firebase belum dapat dihubungi.', 502); }
@@ -35,6 +37,10 @@ export async function firebasePasswordLogin(email, password) {
     if (code === 'OPERATION_NOT_ALLOWED') throw new ApiError('Aktifkan Email/Password di Firebase Authentication.', 503);
     if (code === 'TOO_MANY_ATTEMPTS_TRY_LATER') throw new ApiError('Terlalu banyak percobaan login. Coba kembali nanti.', 429);
     if (code?.includes('API_KEY')) throw new ApiError('Firebase Web API Key belum valid.', 503);
+    if (method === 'signUp') {
+      if (code === 'EMAIL_EXISTS') throw new ApiError('Email sudah terdaftar. Silakan masuk atau hubungi admin.', 409);
+      throw new ApiError('Pendaftaran belum berhasil. Periksa email dan password, lalu coba lagi.', 400);
+    }
     throw new ApiError('Email atau password salah.', 401);
   }
   return result;

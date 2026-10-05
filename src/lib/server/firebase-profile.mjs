@@ -11,7 +11,16 @@ export function profileId(uid) {
 export function profileFromAccount(account) {
   const meta = account.customClaims?.komplainer;
   if (!meta || !['admin', 'pelapor', 'petugas'].includes(meta.role)) return null;
-  return { id: profileId(account.uid), firebaseUid: account.uid, nama: account.displayName || account.email?.split('@')[0] || 'Pengguna', email: account.email, role: meta.role, unit: meta.unit || 'Belum diisi', active: !account.disabled && meta.active !== false, mustChangePassword: meta.mustChangePassword === true };
+  const approval = meta.approval || 'approved'; // Preserve previously approved accounts.
+  return { id: profileId(account.uid), firebaseUid: account.uid, nama: account.displayName || account.email?.split('@')[0] || 'Pengguna', email: account.email, role: meta.role, unit: meta.unit || 'Belum diisi', approval, active: !account.disabled && meta.active !== false && approval === 'approved', mustChangePassword: meta.mustChangePassword === true };
+}
+export function requireApprovedProfile(user) {
+  if (!user || user.approval && user.approval !== 'approved') throw new ApiError(user?.approval === 'rejected' ? 'Pendaftaran ditolak. Hubungi admin.' : 'Akun menunggu persetujuan admin.', 403);
+  if (!user.active) throw new ApiError('Akun dinonaktifkan. Hubungi admin.', 403);
+  return user;
+}
+export function registrationMetadata(unit) {
+  return { role: 'pelapor', unit, active: true, approval: 'pending', mustChangePassword: false };
 }
 export function appClaims(account, metadata) {
   const claims = { ...account.customClaims, komplainer: metadata };

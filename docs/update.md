@@ -1,0 +1,3 @@
+- Pada Form buatkan Tutuorial atau info atau contoh pengisian pada Input Data
+- Pada Rekapan Data, Buatkan Minggu dan Bulanan, kemudian buatkan export to xml atau xlx(excel) kemudian sebelum export bisa di filter
+- Pada Tingkat Keparahan atau status di Ubah menjadi 2 Done dan Follow Up atau Selesai dan Catatan ! dengan Badge yang kontras
