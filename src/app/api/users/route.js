@@ -1,64 +1,69 @@
 import { callScript, json, errorResponse, readBody, assertSameOrigin, ApiError } from '@/lib/server/apps-script';
 import { randomUUID } from 'node:crypto';
 import { hashPassword, validatePassword } from '@/lib/server/password.mjs';
-import { usesFirebase, firebaseAuth, firebaseAccount, requireFirebaseSession } from '@/lib/server/firebase-auth';
+import { usesFirebase, firebaseAuth } from '@/lib/server/firebase-auth';
+import { currentFirebaseUser, firebaseDirectory, writeFirebaseMetadata } from '@/lib/server/firebase-accounts';
+import { appClaims, profileFromAccount, assertAccountChange } from '@/lib/server/firebase-profile.mjs';
 import { firebaseUid, firebaseEmail } from '@/lib/server/firebase-identity.mjs';
 export async function GET() {
-  try { return json(await callScript('users')); } catch (error) { return errorResponse(error); }
+  try { if (usesFirebase()) { const user = await currentFirebaseUser(); if (user.role !== 'admin' || user.mustChangePassword) throw new ApiError('Hanya admin dapat mengelola akun.', 403); return json({ status: 'success', data: await firebaseDirectory() }); } return json(await callScript('users')); } catch (error) { return errorResponse(error); }
 }
 export async function POST(request) {
   try {
     assertSameOrigin(request);
     const body = await readBody(request);
     if (!['createUser', 'updateUser', 'resetPassword'].includes(body.action)) throw new ApiError('Aksi akun tidak valid.');
-    // Check authorization before doing password work.
-    const session = await callScript('session');
-    if (session.user.role !== 'admin' || session.user.mustChangePassword) throw new ApiError('Hanya admin dapat mengelola akun.', 403);
+    const user = usesFirebase() ? await currentFirebaseUser() : (await callScript('session')).user;
+    if (user.role !== 'admin' || user.mustChangePassword) throw new ApiError('Hanya admin dapat mengelola akun.', 403);
     const payload = { id: body.id, nama: body.nama, email: body.email, role: body.role, unit: body.unit, active: body.active };
     if (usesFirebase()) {
-      const identity = await requireFirebaseSession();
       const auth = firebaseAuth();
       if (body.action === 'createUser') {
         try { validatePassword(body.password); } catch (error) { throw new ApiError(error.message); }
-        if (!['admin', 'pelapor', 'petugas'].includes(body.role) || !String(body.nama || '').trim() || !String(body.unit || '').trim()) throw new ApiError('Lengkapi nama, team pelapor, dan peran yang valid.');
+        const nama = accountText(body.nama, 'Nama');
+        const unit = accountText(body.unit, 'Team Pelapor');
+        if (!['admin', 'pelapor', 'petugas'].includes(body.role)) throw new ApiError('Peran tidak valid.');
         const id = `USR-${randomUUID()}`;
-        try {
-          await auth.createUser({ uid: firebaseUid(id), email: firebaseEmail(body.email), password: body.password, displayName: String(body.nama).trim() });
-        } catch { throw new ApiError('Akun Firebase belum dapat dibuat. Periksa email yang sudah terdaftar atau konfigurasi Firebase.', 409); }
-        try {
-          return json(await callScript('createUser', { ...payload, firebaseAccountId: id, passwordHash: `firebase:${firebaseUid(id)}` }));
-        } catch (error) {
-          // A timeout may follow a successful Sheet write: don't delete the identity
-          // unless the backend definitively rejected the new account.
-          if (error instanceof ApiError && error.code < 500) await auth.deleteUser(firebaseUid(id));
-          throw error;
-        }
+        const metadata = { role: body.role, unit, active: true, mustChangePassword: true };
+        const claims = appClaims({}, metadata);
+        let account;
+        try { account = await auth.createUser({ uid: firebaseUid(id), email: firebaseEmail(body.email), password: body.password, displayName: nama, disabled: true }); }
+        catch { throw new ApiError('Email sudah dipakai atau akun Firebase belum dapat dibuat. Akun yang sudah ada dapat langsung login.', 409); }
+        await auth.setCustomUserClaims(account.uid, claims);
+        await auth.updateUser(account.uid, { disabled: false });
+        return json({ status: 'success', user: profileFromAccount({ ...account, disabled: false, customClaims: claims }) });
       }
-      const users = await callScript('users');
-      const target = users.data.find((user) => user.id === body.id);
+      const accounts = await firebaseDirectory();
+      const target = accounts.find((item) => item.id === body.id);
       if (!target) throw new ApiError('Akun tidak ditemukan.', 404);
-      const targetUid = target.firebaseUid || firebaseUid(target.id);
       if (body.action === 'resetPassword') {
         try { validatePassword(body.password); } catch (error) { throw new ApiError(error.message); }
-        const existing = await firebaseAccount(target.id, targetUid);
-        if (existing) await auth.updateUser(targetUid, { password: body.password });
-        else await auth.createUser({ uid: targetUid, email: firebaseEmail(target.email), password: body.password, displayName: target.nama, disabled: !target.active });
-        await auth.revokeRefreshTokens(targetUid);
-        return json(await callScript('resetPassword', { id: target.id, passwordHash: `firebase:${targetUid}` }, true, identity));
+        // Gate the temporary password before changing Firebase credentials.
+        await writeFirebaseMetadata(target.firebaseUid, { role: target.role, unit: target.unit, active: target.active, mustChangePassword: true });
+        await auth.updateUser(target.firebaseUid, { password: body.password });
+        await auth.revokeRefreshTokens(target.firebaseUid);
+        return json({ status: 'success' });
       }
-      // Sheets enforces last-admin and active-PIC constraints before syncing Firebase.
-      const result = await callScript('updateUser', payload);
-      if (await firebaseAccount(target.id, targetUid)) {
-        try {
-          await auth.updateUser(targetUid, { email: firebaseEmail(body.email), displayName: body.nama, disabled: !body.active });
-          await auth.revokeRefreshTokens(targetUid);
-        } catch { throw new ApiError('Profil tersimpan, tetapi sinkronisasi Firebase gagal. Periksa bentrok email, lalu simpan ulang akun.', 502); }
-      }
-      return json(result);
+      assertAccountChange(target, body, accounts, process.env.FIREBASE_ADMIN_UID);
+      const nama = accountText(body.nama, 'Nama');
+      const unit = accountText(body.unit, 'Team Pelapor');
+      const email = firebaseEmail(body.email);
+      const metadata = { role: body.role, unit, active: body.active, mustChangePassword: target.mustChangePassword };
+      appClaims(await auth.getUser(target.firebaseUid), metadata);
+      if (!body.active || body.role !== target.role) await callScript('accountGuard', { id: target.id });
+      await auth.updateUser(target.firebaseUid, { email, displayName: nama, disabled: !body.active });
+      await writeFirebaseMetadata(target.firebaseUid, metadata);
+      await auth.revokeRefreshTokens(target.firebaseUid);
+      return json({ status: 'success' });
     }
     if (body.action === 'createUser' || body.action === 'resetPassword') {
       try { payload.passwordHash = await hashPassword(body.password); } catch (error) { throw new ApiError(error.message); }
     }
     return json(await callScript(body.action, payload));
   } catch (error) { return errorResponse(error); }
+}
+
+function accountText(value, label) {
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 200) throw new ApiError(`${label} wajib diisi, maksimal 200 karakter.`);
+  return value.trim();
 }

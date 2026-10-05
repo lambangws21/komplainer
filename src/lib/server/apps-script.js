@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { tokenHash, SESSION_SECONDS } from './password.mjs';
 import { ApiError } from './api-error.mjs';
 import { usesFirebase, requireFirebaseSession } from './firebase-auth';
+import { firebaseProfile, firebaseDirectory } from './firebase-accounts';
 export { ApiError } from './api-error.mjs';
 
 export const SESSION_COOKIE = 'komplain_session';
@@ -14,10 +15,14 @@ export async function callScript(action, payload = {}, authenticated = true, ver
   let sessionHash;
   let firebaseUserId;
   let firebaseSessionUid;
+  let firebaseContext;
   if (authenticated && usesFirebase()) {
     const identity = verifiedIdentity || await requireFirebaseSession();
     firebaseUserId = identity.id;
     firebaseSessionUid = identity.uid;
+    const user = await firebaseProfile(identity.uid);
+    if (user.mustChangePassword) throw new ApiError('Ganti password sementara sebelum melanjutkan.', 403);
+    firebaseContext = { user, accounts: await firebaseDirectory() };
   } else if (authenticated) {
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new ApiError('Silakan masuk untuk melanjutkan.', 401);
@@ -27,7 +32,7 @@ export async function callScript(action, payload = {}, authenticated = true, ver
   try {
     const response = await fetch(url, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...payload, action, apiKey, ...(authenticated ? (firebaseSessionUid ? { firebaseSessionUid } : firebaseUserId ? { firebaseUserId } : { sessionHash }) : {}) }),
+      body: JSON.stringify({ ...payload, action, apiKey, ...(firebaseContext ? { firebaseContext } : {}), ...(authenticated ? (firebaseSessionUid ? { firebaseSessionUid } : firebaseUserId ? { firebaseUserId } : { sessionHash }) : {}) }),
       signal: AbortSignal.timeout(25000),
     });
     if (!response.ok) throw new Error();
@@ -35,6 +40,7 @@ export async function callScript(action, payload = {}, authenticated = true, ver
   } catch {
     throw new ApiError('Layanan data belum dapat dihubungi. Periksa deployment Google Apps Script atau coba lagi.', 502);
   }
+  if (firebaseContext && result?.status !== 'success' && Number(result?.code) === 401) throw new ApiError('Login Firebase sudah aktif, tetapi endpoint data Apps Script belum menerima konteks Firebase. Perbarui deployment Apps Script ke versi data-only.', 503);
   if (result?.status !== 'success') throw new ApiError(result?.message || 'Apps Script belum sesuai versi aplikasi. Perbarui deployment skrip.', Number(result?.code) || 502);
   return result;
 }

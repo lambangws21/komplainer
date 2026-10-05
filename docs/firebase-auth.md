@@ -1,36 +1,43 @@
-# Login Firebase untuk Komplainer
+# Firebase untuk akun; Apps Script untuk data komplain
 
-Firebase Authentication menyimpan password dan memvalidasi sesi login. Profil (nama, Team Pelapor, peran, status aktif, kewajiban mengganti password) tetap di sheet Pengguna; laporan, PIC, dan riwayat tetap di Google Sheets. Aplikasi membaca peran terbaru dari Sheet pada setiap permintaan, bukan dari input browser.
+Login, password, sesi, nama, email, peran, Team Pelapor, status aktif, dan kewajiban mengganti password dikelola di Firebase Authentication. Metadata khusus aplikasi disimpan pada custom claims `komplainer`; klaim aplikasi lain dipertahankan. Firestore tidak diperlukan. Server membaca profil Firebase terbaru setiap permintaan agar perubahan peran/status langsung berlaku.
 
-## Aktivasi
+Admin yang dipilih: **zakzav@trial.com**, ditetapkan melalui `FIREBASE_ADMIN_UID`. Password akun Firebase yang sudah ada tidak diubah. Akun Firebase lain mendapat profil Pelapor ketika pertama login. Profil mendapat ID Komplainer yang stabil berdasarkan UID; UID hasil migrasi `komplainer:USR-...` mempertahankan ID lama.
 
-1. Update kode `docs/appscript.gs` pada proyek Apps Script, lalu perbarui deployment Web App. URL `/exec` dan APP_API_KEY tetap dipakai.
-2. Aktifkan Email/Password pada Firebase Console → Authentication → Sign-in method. Project yang digunakan: `data-ok-b4091`.
-3. Isi environment server berikut (jangan memakai awalan NEXT_PUBLIC untuk kredensial Admin):
+## Environment server
 
-   ```dotenv
-   AUTH_PROVIDER=firebase
-   FIREBASE_WEB_API_KEY=<firebaseConfig.apiKey dari project yang sama>
-   FIREBASE_SERVICE_ACCOUNT_PATH=<path absolut file Admin SDK untuk lokal>
-   ```
+```dotenv
+AUTH_PROVIDER=firebase
+FIREBASE_WEB_API_KEY=<firebaseConfig.apiKey project data-ok-b4091>
+FIREBASE_ADMIN_UID=<UID akun Admin yang dipilih>
+FIREBASE_SERVICE_ACCOUNT_PATH=<path absolut Admin SDK untuk lokal>
+```
 
-   Di Vercel gunakan `FIREBASE_SERVICE_ACCOUNT_JSON` berisi seluruh isi JSON Admin SDK, menggantikan path lokal. Jangan commit file JSON atau nilai environment. Konfigurasi lokal telah memakai file di proyek template yang diberikan.
+Di Vercel gunakan `FIREBASE_SERVICE_ACCOUNT_JSON` berisi JSON Admin SDK sebagai pengganti path lokal. Kredensial dan UID Admin sudah disiapkan sebagai secret Production/Preview. Jangan memakai NEXT_PUBLIC untuk kredensial Admin dan jangan commit JSON tersebut. Untuk menyiapkan profil Admin secara idempotent:
 
-4. Kredensial Admin SDK, Web API Key, dan UID Admin telah disiapkan sebagai secret Vercel. Set `AUTH_PROVIDER=firebase` di Vercel **setelah deployment Apps Script diperbarui**, kemudian deploy ulang aplikasi. Tanpa flag ini, deployment tetap memakai alur lama agar aktivasi dapat dilakukan bertahap.
+```bash
+node scripts/setup-firebase-admin.mjs
+```
 
-## Akun lama dan akun baru
+## Apps Script hanya untuk laporan
 
-- Login pertama akun lama memverifikasi password lama, membuat akun Firebase, memverifikasi hasil login Firebase, lalu mengganti hash di Sheet dengan penanda ID Firebase. ID pengguna Komplainer tetap sama, sehingga laporan dan delegasi PIC tetap terhubung.
-- Akun Firebase yang sudah ada dapat login menggunakan email/password Firebase dengan UID asli. Profil baru mendapat peran Pelapor. Akun Admin dipilih lewat environment server `FIREBASE_ADMIN_UID`; akun yang dipilih saat ini adalah `zakzav@trial.com`. Akun yang dibuat melalui menu Pengguna tetap memakai UID `komplainer:USR-...`.
-- Untuk menghubungkan akun Firebase ke profil Sheet lama dengan email yang sama, email Firebase harus terverifikasi, kecuali UID Admin yang ditetapkan server atau akun hasil migrasi Komplainer. Profil yang dinonaktifkan tetap ditolak; UID yang sudah terhubung tidak dapat diganti oleh login akun lain.
-- Username awal `lambangws` tetap bisa dipakai di layar login. Firebase menggunakan alamat internal `lambangws@komplainer.invalid`; alamat ini bukan tujuan pengiriman email.
-- Akun baru dan reset password dikelola melalui menu Pengguna. Password sementara wajib diganti. Setelah password diubah/reset, sesi Firebase lama dicabut.
-- Jika sinkronisasi profil Firebase gagal sesudah Sheet diperbarui, pesan akan menyatakan profil sudah tersimpan; perbaiki bentrok email lalu simpan ulang. Jangan mengubah UID langsung di Firebase Console.
-- Keluar menghapus cookie sesi pada perangkat saat ini. Cookie HttpOnly berlaku delapan jam; API memverifikasi tanda tangan Firebase dan pencabutan sesi. Tidak ada token yang disimpan di localStorage.
-- Jika create akun mengalami timeout setelah akun Firebase dibuat, periksa menu Pengguna sebelum mengulang. Akun yatim yang belum memiliki profil tidak dapat mengakses data; admin dapat menghapus UID tersebut melalui Firebase Console.
+1. Update `docs/appscript.gs` di editor proyek yang terhubung ke spreadsheet.
+2. Pilih fungsi `setupKomplainer` lalu Run. Mode `DATA_ONLY = true` membuat header laporan, sheet Riwayat, dan Rekapan Mingguan. Tidak membuat akun Admin, sheet Pengguna, atau sheet Sesi. Sheet akun lama tidak dihapus, tetapi tidak digunakan dalam mode ini.
+3. Perbarui deployment Web App ke versi baru. URL `/exec` dan API key tetap digunakan.
+4. Server Next.js memverifikasi sesi Firebase dan mengirim profil/direktori peran terverifikasi pada POST data ke Apps Script. Input role dari browser tidak diteruskan sebagai sumber hak akses. APP_API_KEY tetap diperlukan untuk memastikan hanya server aplikasi yang bisa menggunakan endpoint.
 
-## Data komplain
+Login dan menu Pengguna tidak bergantung pada Apps Script. Jika Apps Script belum diperbarui, pengguna tetap dapat login, tetapi pemuatan/penyimpanan laporan akan gagal sampai versi data-only dideploy.
 
-Label `Tim / unit` berubah menjadi **Team Pelapor**. Key API `team` dan header historis `Team` tetap digunakan untuk menjaga kompatibilitas data lama. Label profil akun `Unit` juga menjadi **Team Pelapor**; key internal tetap `unit`.
+## Pengguna dan password
 
-Firebase Admin SDK adalah kredensial server. Database Firestore tidak diperlukan untuk alur ini. Referensi: [Firebase session cookies](https://firebase.google.com/docs/auth/admin/manage-cookies), [Firebase Auth REST API](https://firebase.google.com/docs/reference/rest/auth).
+- Gunakan email dan password akun Firebase yang sudah ada, termasuk `zakzav@trial.com`. Tidak perlu akun login dalam Google Sheet.
+- Menu Pengguna membuat akun baru di Firebase. Password sementara wajib diganti sebelum mengakses laporan.
+- Reset password memperbarui password akun Firebase yang sama, mencabut sesi lama, dan mengaktifkan kewajiban ganti password.
+- Nama/email dikelola lewat Firebase Auth; peran dan Team Pelapor lewat klaim `komplainer`. Admin utama dan admin aktif terakhir dilindungi. Sebelum perubahan peran atau nonaktif, Apps Script memeriksa apakah PIC masih memiliki kasus aktif.
+- Batas custom claims Firebase adalah 1.000 byte. Jika Team Pelapor terlalu panjang atau klaim aplikasi lain sudah besar, aplikasi meminta nama team dipersingkat.
+- Cookie HttpOnly berlaku delapan jam, memakai Secure pada produksi dan SameSite=Lax. Tidak ada token disimpan di localStorage. Logout menghapus sesi pada perangkat saat ini.
+- Laporan lama tetap di Sheet. Akun Firebase dengan UID baru memiliki ID baru; admin dapat menugaskan ulang PIC laporan lama ke profil Firebase yang sesuai.
+
+Label Team/Unit menjadi **Team Pelapor**. Key API `team` dan header historis `Team` dipertahankan agar data lama tidak bergeser.
+
+Referensi: [Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims), [session cookies](https://firebase.google.com/docs/auth/admin/manage-cookies).

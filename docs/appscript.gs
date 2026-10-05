@@ -3,8 +3,11 @@
  * Setup: Script Properties APP_API_KEY (same as GOOGLE_SCRIPT_API_KEY in Vercel),
  * optionally COMPLAINT_SHEET_NAME. Run setupKomplainer(), then deploy a NEW web-app version.
  * The first eight columns remain compatible with v1. Never use getActiveSheet for data requests.
- * Accounts are created from the application; Password Hash stores scrypt hashes, not passwords.
+ * Production DATA_ONLY mode: Firebase owns accounts; trusted Next.js server sends verified context.
  */
+// Firebase handles every account; set false only for legacy migration tests.
+var DATA_ONLY = true;
+var FIREBASE_DIRECTORY = null;
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
 var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit']);
 var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Aktif', 'Dibuat Pada', 'Wajib Ganti Password'];
@@ -17,7 +20,7 @@ var SUMMARY_HEADERS = ['Tanggal Rekapan', 'Total Kasus Minggu Ini'].concat(LEVEL
 // One-time initial password hash; never reset an existing account during setup.
 var INITIAL_ADMIN_HASH = 'scrypt:79ba41d40b7579ebcb1b33e905843ef8:aa25c5c093dfb3f1cd5cfe81cd1873f0030b2fabb3b2f88d5e2560125d465b5f85036be6327c2b3cfd7227f09bc45fba12f23d875a704da6986f44d272fab6d0';
 
-function fail(message, code) { var error = new Error(message); error.code = code || 400; throw error; }
+function fail(message, code) { var error = new Error(message || 'Fungsi fail hanya helper. Pilih setupKomplainer pada dropdown fungsi, lalu Run.'); error.code = code || 400; throw error; }
 function props() { return PropertiesService.getScriptProperties(); }
 function spreadsheet() {
   var id = props().getProperty('SPREADSHEET_ID');
@@ -81,8 +84,7 @@ function systemSheet(name, headers, legacyWidth) {
 }
 function ensureSchema() {
   ensureHeaders(dataSheet());
-  systemSheet('Pengguna', USER_HEADERS);
-  systemSheet('Sesi', SESSION_HEADERS);
+  if (!DATA_ONLY) { systemSheet('Pengguna', USER_HEADERS); systemSheet('Sesi', SESSION_HEADERS); }
   systemSheet('Riwayat', HISTORY_HEADERS);
   systemSheet('Rekapan Mingguan', SUMMARY_HEADERS, 6);
 }
@@ -99,7 +101,7 @@ function setupKomplainer() {
   lock.waitLock(20000);
   try {
     ensureSchema();
-    seedInitialAdmin();
+    if (!DATA_ONLY) seedInitialAdmin();
     var key = props().getProperty('APP_API_KEY');
     if (!key || key.trim().length < 32) {
       key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
@@ -145,11 +147,12 @@ function loginField(value) {
 }
 function validHash(hash) { if (/^firebase:[^\s]{1,128}$/.test(String(hash))) return hash; if (!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(String(hash))) fail('Hash password tidak valid.'); return hash; }
 function allUsers() {
+  if (FIREBASE_DIRECTORY) return FIREBASE_DIRECTORY;
   return rows(systemSheet('Pengguna', USER_HEADERS), USER_HEADERS.length).map(function (row, index) {
     return { id: String(row[0]), nama: clean(row[1]), email: clean(row[2]), role: String(row[3]), unit: clean(row[4]), passwordHash: String(row[5]), active: row[6] === true || String(row[6]).toLowerCase() === 'true', createdAt: timestamp(row[7]), mustChangePassword: row[8] === true || String(row[8]).toLowerCase() === 'true', row: index + 2 };
   });
 }
-function publicUser(user) { return { id: user.id, nama: user.nama, email: user.email, role: user.role, unit: user.unit, active: user.active, mustChangePassword: user.mustChangePassword, firebaseUid: user.passwordHash.indexOf('firebase:') === 0 ? user.passwordHash.slice(9) : null }; }
+function publicUser(user) { return { id: user.id, nama: user.nama, email: user.email, role: user.role, unit: user.unit, active: user.active, mustChangePassword: user.mustChangePassword, firebaseUid: String(user.passwordHash || '').indexOf('firebase:') === 0 ? user.passwordHash.slice(9) : null }; }
 function requireAdmin(user) { if (user.role !== 'admin') fail('Hanya admin dapat melakukan tindakan ini.', 403); }
 function throttle(name) {
   var key = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, name));
@@ -224,10 +227,18 @@ function doPost(event) {
     if (typeof body.apiKey !== 'string' || body.apiKey !== secret) fail('Akses layanan tidak diizinkan.', 403);
     lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) fail('Layanan sedang sibuk. Coba lagi.', 503);
+    if (DATA_ONLY) {
+      var permitted = ['list', 'detail', 'create', 'update', 'delete', 'assign', 'followUp', 'reopen', 'accountGuard'];
+      if (permitted.indexOf(body.action) === -1) fail('Akun dan login ditangani Firebase, bukan Apps Script.', 403);
+      if (!body.firebaseContext || !body.firebaseContext.user || !Array.isArray(body.firebaseContext.accounts)) fail('Konteks Firebase dari server aplikasi diperlukan. Update aplikasi dan login kembali.', 401);
+      var verifiedProfile = body.firebaseContext.user;
+      if (!verifiedProfile.id || ROLES.indexOf(verifiedProfile.role) === -1 || verifiedProfile.active !== true) fail('Profil Firebase tidak valid.', 403);
+      FIREBASE_DIRECTORY = body.firebaseContext.accounts;
+    }
     ensureSchema();
     return jsonResponse(handle(body));
   } catch (error) { return jsonResponse({ status: 'error', code: error.code || 500, message: error.code ? error.message : 'Layanan data gagal memproses permintaan. Periksa konfigurasi sheet.' }); }
-  finally { if (lock && lock.hasLock()) lock.releaseLock(); }
+  finally { FIREBASE_DIRECTORY = null; if (lock && lock.hasLock()) lock.releaseLock(); }
 }
 function handle(body) {
   var action = body.action;
@@ -309,7 +320,9 @@ function handle(body) {
     return { status: 'success', user: publicUser(loginUser) };
   }
   var user;
-  if (body.firebaseSessionUid) {
+  if (DATA_ONLY) {
+    user = body.firebaseContext.user;
+  } else if (body.firebaseSessionUid) {
     user = allUsers().filter(function (account) { return account.active && account.passwordHash === 'firebase:' + body.firebaseSessionUid; })[0];
     if (!user) fail('Akun Firebase tidak aktif atau belum terhubung.', 401);
   } else if (body.firebaseUserId) {
@@ -365,6 +378,11 @@ function handle(body) {
     }
     revokeSessions(target.id);
     audit('', user, action === 'resetPassword' ? 'Password direset admin' : 'Akun diperbarui', '', { userId: target.id });
+    return { status: 'success' };
+  }
+  if (action === 'accountGuard') {
+    requireAdmin(user);
+    if (reports().some(function (item) { return item.picId === body.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
     return { status: 'success' };
   }
   if (action === 'list') {

@@ -52,6 +52,7 @@ export function createFixture({ legacyRows = [] } = {}) {
     ContentService: { MimeType: { JSON: 'application/json' }, createTextOutput: (text) => ({ text, setMimeType() { return this; } }) },
   });
   vm.runInContext(readFileSync(new URL('../../docs/appscript.gs', import.meta.url), 'utf8'), context);
+  context.DATA_ONLY = false;
   context.ensureSchema();
   const request = (body) => JSON.parse(context.doPost({ postData: { contents: JSON.stringify({ apiKey: fakeKey, ...body }) } }).text);
   function login(email, hash = fakeHash) {

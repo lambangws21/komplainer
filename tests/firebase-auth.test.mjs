@@ -13,32 +13,23 @@ test('Firebase identity is scoped to Komplainer and preserves legacy admin usern
   assert.equal(firebaseEmail('lambangws'), 'lambangws@komplainer.invalid');
 });
 
-test('migration only follows successful password and matching Firebase UID', async () => {
-  const user = { id: `USR-${randomUUID()}` };
+test('existing Firebase password login is independent of Sheets and rejects mismatched tokens', async () => {
   const events = [];
   const services = {
-    getAccount: async () => null,
-    verifyLegacy: async () => false,
-    createAccount: async () => events.push('created'),
-    signIn: async () => ({ localId: firebaseUid(user.id), idToken: 'test-token' }),
-    migrate: async () => { events.push('migrated'); return { user }; },
+    signIn: async () => ({ localId: 'existing-uid', idToken: 'test-token' }),
+    verifyToken: async () => ({ uid: 'existing-uid', email: 'existing@example.test' }),
+    getAccount: async (uid) => { events.push('account'); return { uid }; },
+    ensureProfile: async (account) => ({ firebaseUid: account.uid, role: 'pelapor' }),
   };
-  await assert.rejects(authenticateFirebase({ user, passwordHash: fakeHash }, services), { code: 401 });
-  assert.deepEqual(events, []);
-  services.verifyLegacy = async () => true;
-  services.signIn = async () => ({ localId: 'another-app' });
-  await assert.rejects(authenticateFirebase({ user, passwordHash: fakeHash }, services), { code: 403 });
-  assert.deepEqual(events, ['created']);
+  const result = await authenticateFirebase('existing@example.test', services);
+  assert.equal(result.user.firebaseUid, 'existing-uid');
+  assert.deepEqual(events, ['account']);
   events.length = 0;
-  services.getAccount = async () => ({ uid: firebaseUid(user.id) });
-  services.verifyLegacy = async () => { throw new Error('Legacy fallback forbidden'); };
-  services.signIn = async () => { throw Object.assign(new Error('Wrong Firebase password'), { code: 401 }); };
-  await assert.rejects(authenticateFirebase({ user, passwordHash: fakeHash }, services), { code: 401 });
+  services.verifyToken = async () => ({ uid: 'another-project-uid', email: 'existing@example.test' });
+  await assert.rejects(authenticateFirebase('existing@example.test', services), { code: 403 });
   assert.deepEqual(events, []);
-  services.signIn = async () => ({ localId: firebaseUid(user.id), idToken: 'test-token' });
-  const result = await authenticateFirebase({ user, passwordHash: fakeHash }, services);
-  assert.equal(result.user.id, user.id);
-  assert.deepEqual(events, ['migrated']);
+  services.signIn = async () => { throw Object.assign(new Error('Wrong password'), { code: 401 }); };
+  await assert.rejects(authenticateFirebase('existing@example.test', services), { code: 401 });
 });
 
 test('Firebase migration erases the Sheet hash, revokes old sessions and preserves case scope', () => {

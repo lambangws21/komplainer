@@ -1,6 +1,6 @@
 # Aktivasi akun dan workflow Komplainer
 
-Untuk login menggunakan Firebase, ikuti [panduan Firebase](firebase-auth.md). Bagian password dan sesi Google Sheets di bawah berlaku untuk mode lama ketika `AUTH_PROVIDER` tidak diisi `firebase`.
+Konfigurasi aktif menggunakan [Firebase untuk semua akun](firebase-auth.md), sementara Apps Script hanya menyimpan laporan. Panduan di bawah adalah arsip mode lama dan membutuhkan `DATA_ONLY = false`; jangan menggunakannya untuk membuat akun produksi baru.
 
 Versi ini membutuhkan aplikasi dan `docs/appscript.gs` yang diperbarui bersama. Jangan mengarahkan aplikasi baru ke skrip lama.
 
