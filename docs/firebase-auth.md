@@ -16,12 +16,13 @@ Firebase Authentication menyimpan password dan memvalidasi sesi login. Profil (n
 
    Di Vercel gunakan `FIREBASE_SERVICE_ACCOUNT_JSON` berisi seluruh isi JSON Admin SDK, menggantikan path lokal. Jangan commit file JSON atau nilai environment. Konfigurasi lokal telah memakai file di proyek template yang diberikan.
 
-4. Set `AUTH_PROVIDER=firebase` di Vercel **setelah deployment Apps Script diperbarui**, kemudian deploy ulang aplikasi. Tanpa flag ini, deployment tetap memakai alur lama agar aktivasi dapat dilakukan bertahap.
+4. Kredensial Admin SDK, Web API Key, dan UID Admin telah disiapkan sebagai secret Vercel. Set `AUTH_PROVIDER=firebase` di Vercel **setelah deployment Apps Script diperbarui**, kemudian deploy ulang aplikasi. Tanpa flag ini, deployment tetap memakai alur lama agar aktivasi dapat dilakukan bertahap.
 
 ## Akun lama dan akun baru
 
 - Login pertama akun lama memverifikasi password lama, membuat akun Firebase, memverifikasi hasil login Firebase, lalu mengganti hash di Sheet dengan penanda ID Firebase. ID pengguna Komplainer tetap sama, sehingga laporan dan delegasi PIC tetap terhubung.
-- Pengguna Firebase diberi UID `komplainer:USR-...`. Aplikasi tidak mengambil alih akun Firebase milik aplikasi lain. Email yang sudah dipakai akun lain akan ditolak; admin perlu memilih email lain atau memakai project Firebase terpisah.
+- Akun Firebase yang sudah ada dapat login menggunakan email/password Firebase dengan UID asli. Profil baru mendapat peran Pelapor. Akun Admin dipilih lewat environment server `FIREBASE_ADMIN_UID`; akun yang dipilih saat ini adalah `zakzav@trial.com`. Akun yang dibuat melalui menu Pengguna tetap memakai UID `komplainer:USR-...`.
+- Untuk menghubungkan akun Firebase ke profil Sheet lama dengan email yang sama, email Firebase harus terverifikasi, kecuali UID Admin yang ditetapkan server atau akun hasil migrasi Komplainer. Profil yang dinonaktifkan tetap ditolak; UID yang sudah terhubung tidak dapat diganti oleh login akun lain.
 - Username awal `lambangws` tetap bisa dipakai di layar login. Firebase menggunakan alamat internal `lambangws@komplainer.invalid`; alamat ini bukan tujuan pengiriman email.
 - Akun baru dan reset password dikelola melalui menu Pengguna. Password sementara wajib diganti. Setelah password diubah/reset, sesi Firebase lama dicabut.
 - Jika sinkronisasi profil Firebase gagal sesudah Sheet diperbarui, pesan akan menyatakan profil sudah tersimpan; perbaiki bentrok email lalu simpan ulang. Jangan mengubah UID langsung di Firebase Console.

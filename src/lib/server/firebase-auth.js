@@ -39,8 +39,8 @@ export async function firebasePasswordLogin(email, password) {
   }
   return result;
 }
-export async function firebaseAccount(id) {
-  try { return await firebaseAuth().getUser(firebaseUid(id)); }
+export async function firebaseAccount(id, uid = firebaseUid(id)) {
+  try { return await firebaseAuth().getUser(uid); }
   catch (error) { if (error.code === 'auth/user-not-found') return null; throw error; }
 }
 export async function requireFirebaseSession() {
@@ -49,13 +49,15 @@ export async function requireFirebaseSession() {
   const auth = firebaseAuth();
   try {
     const decoded = await auth.verifySessionCookie(token, true);
-    return { id: complaintUserId(decoded.uid), uid: decoded.uid, email: decoded.email };
+    let id;
+    try { id = complaintUserId(decoded.uid); } catch { /* Existing Firebase UID is linked by the backend. */ }
+    return { id, uid: decoded.uid, email: decoded.email };
   } catch { throw new ApiError('Sesi berakhir. Silakan masuk kembali.', 401); }
 }
-export async function setFirebaseSession(idToken, id) {
+export async function setFirebaseSession(idToken, id, uid = firebaseUid(id)) {
   const auth = firebaseAuth();
   const decoded = await auth.verifyIdToken(idToken, true);
-  if (decoded.uid !== firebaseUid(id)) throw new ApiError('Akun Firebase tidak sesuai profil Komplainer.', 403);
+  if (decoded.uid !== uid) throw new ApiError('Akun Firebase tidak sesuai profil Komplainer.', 403);
   const session = await auth.createSessionCookie(idToken, { expiresIn: SESSION_SECONDS * 1000 });
   (await cookies()).set(FIREBASE_COOKIE, session, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: SESSION_SECONDS });
 }

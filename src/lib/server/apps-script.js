@@ -13,8 +13,11 @@ export async function callScript(action, payload = {}, authenticated = true, ver
   if (!url || !apiKey) throw new ApiError('Konfigurasi server belum lengkap. Isi GOOGLE_SCRIPT_URL dan GOOGLE_SCRIPT_API_KEY di environment Vercel/lokal, lalu deploy ulang. Lihat panduan setup akun.', 503);
   let sessionHash;
   let firebaseUserId;
+  let firebaseSessionUid;
   if (authenticated && usesFirebase()) {
-    firebaseUserId = (verifiedIdentity || await requireFirebaseSession()).id;
+    const identity = verifiedIdentity || await requireFirebaseSession();
+    firebaseUserId = identity.id;
+    firebaseSessionUid = identity.uid;
   } else if (authenticated) {
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new ApiError('Silakan masuk untuk melanjutkan.', 401);
@@ -24,7 +27,7 @@ export async function callScript(action, payload = {}, authenticated = true, ver
   try {
     const response = await fetch(url, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...payload, action, apiKey, ...(authenticated ? (firebaseUserId ? { firebaseUserId } : { sessionHash }) : {}) }),
+      body: JSON.stringify({ ...payload, action, apiKey, ...(authenticated ? (firebaseSessionUid ? { firebaseSessionUid } : firebaseUserId ? { firebaseUserId } : { sessionHash }) : {}) }),
       signal: AbortSignal.timeout(25000),
     });
     if (!response.ok) throw new Error();

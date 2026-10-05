@@ -73,3 +73,45 @@ test('Firebase temporary passwords remain gated and admin can reset to Firebase 
   assert.equal(f.request({ action: 'resetPassword', ...f.adminSession, id, passwordHash: `firebase:${firebaseUid(id)}` }).status, 'success');
   assert.equal(f.request({ action: 'list', ...session }).code, 403);
 });
+
+test('existing Firebase accounts get reporter profiles and only the configured account gets admin', () => {
+  const f = createFixture();
+  const uid = 'existing-firebase-uid';
+  const body = { action: 'firebaseLink', firebaseUid: uid, email: 'existing@example.test', nama: 'Existing Firebase', grantAdmin: false };
+  const first = f.request(body).user;
+  assert.equal(first.role, 'pelapor');
+  assert.equal(first.firebaseUid, uid);
+  assert.equal(first.mustChangePassword, false);
+  assert.equal(f.request(body).user.id, first.id);
+  assert.equal(f.request({ action: 'session', firebaseSessionUid: uid }).user.id, first.id);
+  assert.equal(f.request({ action: 'users', firebaseSessionUid: uid }).code, 403);
+  assert.equal(f.request({ ...body, grantAdmin: true }).user.role, 'admin');
+  assert.equal(f.request({ action: 'users', firebaseSessionUid: uid }).status, 'success');
+  assert.equal(f.request({ action: 'session', firebaseSessionUid: 'unlinked-uid' }).code, 401);
+  assert.equal(f.request({ ...body, apiKey: 'wrong' }).code, 403);
+});
+
+test('linking a legacy profile requires verified email and keeps report ownership', () => {
+  const f = createFixture();
+  const reporter = f.addUser('link-existing@example.test');
+  const item = f.createReport(reporter).data;
+  const body = { action: 'firebaseLink', email: reporter.user.email, firebaseUid: 'firebase-existing-user', nama: 'Firebase Existing', emailVerified: false };
+  assert.equal(f.request(body).code, 403);
+  const linked = f.request({ ...body, emailVerified: true }).user;
+  assert.equal(linked.id, reporter.user.id);
+  assert.equal(f.request({ action: 'list', firebaseSessionUid: body.firebaseUid }).data[0].id, item.id);
+  assert.equal(f.request({ action: 'session', ...reporter }).code, 401);
+  assert.equal(f.request({ ...body, firebaseUid: 'different-firebase-user', emailVerified: true }).code, 409);
+  const row = f.ss.getSheetByName('Pengguna').data.find((row) => row[0] === linked.id);
+  row[6] = false;
+  assert.equal(f.request(body).code, 403);
+});
+
+test('resetting an existing Firebase UID retains its original identity and temporary-password gate', () => {
+  const f = createFixture();
+  const linked = f.request({ action: 'firebaseLink', firebaseUid: 'firebase-old-uid', email: 'reset-existing@example.test', nama: 'Firebase Old' }).user;
+  assert.equal(f.request({ action: 'resetPassword', ...f.adminSession, id: linked.id, passwordHash: 'firebase:firebase-old-uid' }).status, 'success');
+  assert.equal(f.request({ action: 'list', firebaseSessionUid: 'firebase-old-uid' }).code, 403);
+  assert.equal(f.request({ action: 'firebasePasswordChanged', firebaseSessionUid: 'firebase-old-uid' }).status, 'success');
+  assert.equal(f.request({ action: 'list', firebaseSessionUid: 'firebase-old-uid' }).status, 'success');
+});

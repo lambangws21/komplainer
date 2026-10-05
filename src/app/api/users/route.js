@@ -37,20 +37,21 @@ export async function POST(request) {
       const users = await callScript('users');
       const target = users.data.find((user) => user.id === body.id);
       if (!target) throw new ApiError('Akun tidak ditemukan.', 404);
+      const targetUid = target.firebaseUid || firebaseUid(target.id);
       if (body.action === 'resetPassword') {
         try { validatePassword(body.password); } catch (error) { throw new ApiError(error.message); }
-        const existing = await firebaseAccount(target.id);
-        if (existing) await auth.updateUser(firebaseUid(target.id), { password: body.password });
-        else await auth.createUser({ uid: firebaseUid(target.id), email: firebaseEmail(target.email), password: body.password, displayName: target.nama, disabled: !target.active });
-        await auth.revokeRefreshTokens(firebaseUid(target.id));
-        return json(await callScript('resetPassword', { id: target.id, passwordHash: `firebase:${firebaseUid(target.id)}` }, true, identity));
+        const existing = await firebaseAccount(target.id, targetUid);
+        if (existing) await auth.updateUser(targetUid, { password: body.password });
+        else await auth.createUser({ uid: targetUid, email: firebaseEmail(target.email), password: body.password, displayName: target.nama, disabled: !target.active });
+        await auth.revokeRefreshTokens(targetUid);
+        return json(await callScript('resetPassword', { id: target.id, passwordHash: `firebase:${targetUid}` }, true, identity));
       }
       // Sheets enforces last-admin and active-PIC constraints before syncing Firebase.
       const result = await callScript('updateUser', payload);
-      if (await firebaseAccount(target.id)) {
+      if (await firebaseAccount(target.id, targetUid)) {
         try {
-          await auth.updateUser(firebaseUid(target.id), { email: firebaseEmail(body.email), displayName: body.nama, disabled: !body.active });
-          await auth.revokeRefreshTokens(firebaseUid(target.id));
+          await auth.updateUser(targetUid, { email: firebaseEmail(body.email), displayName: body.nama, disabled: !body.active });
+          await auth.revokeRefreshTokens(targetUid);
         } catch { throw new ApiError('Profil tersimpan, tetapi sinkronisasi Firebase gagal. Periksa bentrok email, lalu simpan ulang akun.', 502); }
       }
       return json(result);

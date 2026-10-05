@@ -143,13 +143,13 @@ function loginField(value) {
   var identifier = textField(value, 'Email atau username', true, 254).toLowerCase();
   return identifier === 'lambangws' ? identifier : emailField(identifier);
 }
-function validHash(hash) { if (/^firebase:komplainer:USR-[a-f0-9-]{36}$/i.test(String(hash))) return hash; if (!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(String(hash))) fail('Hash password tidak valid.'); return hash; }
+function validHash(hash) { if (/^firebase:[^\s]{1,128}$/.test(String(hash))) return hash; if (!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(String(hash))) fail('Hash password tidak valid.'); return hash; }
 function allUsers() {
   return rows(systemSheet('Pengguna', USER_HEADERS), USER_HEADERS.length).map(function (row, index) {
     return { id: String(row[0]), nama: clean(row[1]), email: clean(row[2]), role: String(row[3]), unit: clean(row[4]), passwordHash: String(row[5]), active: row[6] === true || String(row[6]).toLowerCase() === 'true', createdAt: timestamp(row[7]), mustChangePassword: row[8] === true || String(row[8]).toLowerCase() === 'true', row: index + 2 };
   });
 }
-function publicUser(user) { return { id: user.id, nama: user.nama, email: user.email, role: user.role, unit: user.unit, active: user.active, mustChangePassword: user.mustChangePassword }; }
+function publicUser(user) { return { id: user.id, nama: user.nama, email: user.email, role: user.role, unit: user.unit, active: user.active, mustChangePassword: user.mustChangePassword, firebaseUid: user.passwordHash.indexOf('firebase:') === 0 ? user.passwordHash.slice(9) : null }; }
 function requireAdmin(user) { if (user.role !== 'admin') fail('Hanya admin dapat melakukan tindakan ini.', 403); }
 function throttle(name) {
   var key = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, name));
@@ -236,6 +236,42 @@ function handle(body) {
     ensureHeaders(dataSheet());
     return createUser(body, null, true);
   }
+  if (action === 'firebaseLink') {
+    var linkedUid = String(body.firebaseUid || '');
+    if (!/^[^\s]{1,128}$/.test(linkedUid)) fail('UID Firebase tidak valid.');
+    var linkedEmail = loginField(body.email);
+    throttle(linkedEmail);
+    var linkedUsers = allUsers();
+    var linked = linkedUsers.filter(function (account) { return account.passwordHash === 'firebase:' + linkedUid; })[0];
+    var matching = linkedUsers.filter(function (account) { return account.email === linkedEmail; })[0];
+    if (!linked && matching) {
+      if (matching.passwordHash.indexOf('firebase:') === 0) fail('Email terhubung ke akun Firebase lain.', 409);
+      // Verified email or an explicitly selected admin can claim an old profile.
+      if (body.emailVerified !== true && body.grantAdmin !== true && linkedUid !== 'komplainer:' + matching.id) fail('Verifikasi email Firebase untuk menghubungkan profil lama, atau hubungi admin.', 403);
+      linked = matching;
+    }
+    var linkedSheet = systemSheet('Pengguna', USER_HEADERS);
+    if (!linked) {
+      linked = { id: 'USR-' + Utilities.getUuid(), nama: textField(body.nama, 'Nama', true), email: linkedEmail, role: body.grantAdmin === true ? 'admin' : 'pelapor', unit: 'Belum diisi', passwordHash: 'firebase:' + linkedUid, active: true, mustChangePassword: false, row: linkedSheet.getLastRow() + 1 };
+      linkedSheet.appendRow(safeRow([linked.id, linked.nama, linked.email, linked.role, linked.unit, linked.passwordHash, true, nowIso(), false]));
+      audit('', linked, 'Akun Firebase dihubungkan');
+    } else {
+      if (!linked.active) fail('Akun Komplainer dinonaktifkan. Hubungi admin.', 403);
+      if (linked.email !== linkedEmail) fail('Email Firebase berbeda dari profil. Hubungi admin untuk menyelaraskan akun.', 409);
+      if (linked.passwordHash !== 'firebase:' + linkedUid) {
+        linkedSheet.getRange(linked.row, 6).setValue('firebase:' + linkedUid);
+        linked.passwordHash = 'firebase:' + linkedUid;
+        revokeSessions(linked.id);
+        audit('', linked, 'Akun lama dihubungkan ke Firebase');
+      }
+      if (body.grantAdmin === true && linked.role !== 'admin') {
+        linkedSheet.getRange(linked.row, 4).setValue('admin');
+        linked.role = 'admin';
+        audit('', linked, 'Admin Firebase ditetapkan oleh konfigurasi server');
+      }
+    }
+    return { status: 'success', user: publicUser(linked) };
+  }
   if (action === 'firebaseLookup') {
     var firebaseLogin = loginField(body.email);
     throttle(firebaseLogin);
@@ -273,14 +309,17 @@ function handle(body) {
     return { status: 'success', user: publicUser(loginUser) };
   }
   var user;
-  if (body.firebaseUserId) {
+  if (body.firebaseSessionUid) {
+    user = allUsers().filter(function (account) { return account.active && account.passwordHash === 'firebase:' + body.firebaseSessionUid; })[0];
+    if (!user) fail('Akun Firebase tidak aktif atau belum terhubung.', 401);
+  } else if (body.firebaseUserId) {
     user = allUsers().filter(function (account) { return account.id === body.firebaseUserId && account.active && account.passwordHash === 'firebase:komplainer:' + account.id; })[0];
     if (!user) fail('Akun Firebase tidak aktif atau belum terhubung.', 401);
   } else user = sessionUser(body.sessionHash);
   if (action === 'session') return { status: 'success', user: publicUser(user) };
   if (action === 'logout') { revokeSessions(null, body.sessionHash); return { status: 'success' }; }
   if (action === 'firebasePasswordChanged') {
-    if (!body.firebaseUserId) fail('Sesi Firebase diperlukan.', 403);
+    if (!body.firebaseUserId && !body.firebaseSessionUid) fail('Sesi Firebase diperlukan.', 403);
     systemSheet('Pengguna', USER_HEADERS).getRange(user.row, 9).setValue(false);
     audit('', user, 'Password Firebase diperbarui');
     return { status: 'success' };
@@ -310,7 +349,7 @@ function handle(body) {
     var sheet = systemSheet('Pengguna', USER_HEADERS);
     if (action === 'resetPassword') {
       var resetHash = validHash(body.passwordHash);
-      if (resetHash.indexOf('firebase:') === 0 && resetHash !== 'firebase:komplainer:' + target.id) fail('Identitas reset Firebase tidak sesuai.');
+      if (resetHash.indexOf('firebase:') === 0 && resetHash !== (target.passwordHash.indexOf('firebase:') === 0 ? target.passwordHash : 'firebase:komplainer:' + target.id)) fail('Identitas reset Firebase tidak sesuai.');
       sheet.getRange(target.row, 6).setValue(resetHash);
       sheet.getRange(target.row, 9).setValue(true);
     } else {
