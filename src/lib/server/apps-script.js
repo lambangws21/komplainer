@@ -2,17 +2,20 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { tokenHash, SESSION_SECONDS } from './password.mjs';
+import { ApiError } from './api-error.mjs';
+import { usesFirebase, requireFirebaseSession } from './firebase-auth';
+export { ApiError } from './api-error.mjs';
 
 export const SESSION_COOKIE = 'komplain_session';
-export class ApiError extends Error {
-  constructor(message, code = 400) { super(message); this.code = code; }
-}
-export async function callScript(action, payload = {}, authenticated = true) {
+export async function callScript(action, payload = {}, authenticated = true, verifiedIdentity = null) {
   const url = process.env.GOOGLE_SCRIPT_URL?.trim() || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL?.trim();
   const apiKey = process.env.GOOGLE_SCRIPT_API_KEY?.trim();
   if (!url || !apiKey) throw new ApiError('Konfigurasi server belum lengkap. Isi GOOGLE_SCRIPT_URL dan GOOGLE_SCRIPT_API_KEY di environment Vercel/lokal, lalu deploy ulang. Lihat panduan setup akun.', 503);
   let sessionHash;
-  if (authenticated) {
+  let firebaseUserId;
+  if (authenticated && usesFirebase()) {
+    firebaseUserId = (verifiedIdentity || await requireFirebaseSession()).id;
+  } else if (authenticated) {
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new ApiError('Silakan masuk untuk melanjutkan.', 401);
     sessionHash = tokenHash(token);
@@ -21,7 +24,7 @@ export async function callScript(action, payload = {}, authenticated = true) {
   try {
     const response = await fetch(url, {
       method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...payload, action, apiKey, ...(authenticated ? { sessionHash } : {}) }),
+      body: JSON.stringify({ ...payload, action, apiKey, ...(authenticated ? (firebaseUserId ? { firebaseUserId } : { sessionHash }) : {}) }),
       signal: AbortSignal.timeout(25000),
     });
     if (!response.ok) throw new Error();

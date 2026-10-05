@@ -143,7 +143,7 @@ function loginField(value) {
   var identifier = textField(value, 'Email atau username', true, 254).toLowerCase();
   return identifier === 'lambangws' ? identifier : emailField(identifier);
 }
-function validHash(hash) { if (!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(String(hash))) fail('Hash password tidak valid.'); return hash; }
+function validHash(hash) { if (/^firebase:komplainer:USR-[a-f0-9-]{36}$/i.test(String(hash))) return hash; if (!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(String(hash))) fail('Hash password tidak valid.'); return hash; }
 function allUsers() {
   return rows(systemSheet('Pengguna', USER_HEADERS), USER_HEADERS.length).map(function (row, index) {
     return { id: String(row[0]), nama: clean(row[1]), email: clean(row[2]), role: String(row[3]), unit: clean(row[4]), passwordHash: String(row[5]), active: row[6] === true || String(row[6]).toLowerCase() === 'true', createdAt: timestamp(row[7]), mustChangePassword: row[8] === true || String(row[8]).toLowerCase() === 'true', row: index + 2 };
@@ -208,7 +208,8 @@ function createUser(body, actor, bootstrap) {
   if (users.some(function (user) { return user.email === email; })) fail('Email sudah terdaftar.', 409);
   var role = bootstrap ? 'admin' : body.role;
   if (ROLES.indexOf(role) === -1) fail('Peran tidak valid.');
-  var user = { id: 'USR-' + Utilities.getUuid(), nama: textField(body.nama, 'Nama', true), email: email, role: role, unit: textField(body.unit, 'Unit', true), passwordHash: validHash(body.passwordHash), active: true, mustChangePassword: !bootstrap };
+  var user = { id: body.firebaseAccountId && /^USR-[a-f0-9-]{36}$/i.test(body.firebaseAccountId) ? body.firebaseAccountId : 'USR-' + Utilities.getUuid(), nama: textField(body.nama, 'Nama', true), email: email, role: role, unit: textField(body.unit, 'Unit', true), passwordHash: validHash(body.passwordHash), active: true, mustChangePassword: !bootstrap };
+  if (user.passwordHash.indexOf('firebase:') === 0 && user.passwordHash !== 'firebase:komplainer:' + user.id) fail('Identitas akun Firebase tidak sesuai.');
   systemSheet('Pengguna', USER_HEADERS).appendRow(safeRow([user.id, user.nama, email, role, user.unit, user.passwordHash, true, nowIso(), user.mustChangePassword]));
   audit('', actor || user, 'Akun dibuat', '', { userId: user.id, role: role });
   return { status: 'success', user: publicUser(user) };
@@ -235,6 +236,24 @@ function handle(body) {
     ensureHeaders(dataSheet());
     return createUser(body, null, true);
   }
+  if (action === 'firebaseLookup') {
+    var firebaseLogin = loginField(body.email);
+    throttle(firebaseLogin);
+    var firebaseProfile = allUsers().filter(function (account) { return account.email === firebaseLogin && account.active; })[0];
+    return { status: 'success', user: firebaseProfile ? publicUser(firebaseProfile) : null, passwordHash: firebaseProfile && firebaseProfile.passwordHash.indexOf('scrypt:') === 0 ? firebaseProfile.passwordHash : null };
+  }
+  if (action === 'firebaseMigrate') {
+    var migrating = allUsers().filter(function (account) { return account.id === body.id && account.active; })[0];
+    if (!migrating || body.firebaseUid !== 'komplainer:' + migrating.id) fail('Identitas Firebase tidak sesuai.', 403);
+    var marker = 'firebase:' + body.firebaseUid;
+    if (migrating.passwordHash !== marker) {
+      if (!body.expectedHash || body.expectedHash !== migrating.passwordHash) fail('Akun sudah diperbarui. Ulangi login.', 409);
+      systemSheet('Pengguna', USER_HEADERS).getRange(migrating.row, 6).setValue(marker);
+      revokeSessions(migrating.id);
+      audit('', migrating, 'Login dipindahkan ke Firebase');
+    }
+    return { status: 'success', user: publicUser(migrating) };
+  }
   if (action === 'authLookup') {
     var email = loginField(body.email);
     throttle(email);
@@ -253,9 +272,19 @@ function handle(body) {
     sessions.appendRow([body.sessionHash, loginUser.id, body.expiresAt]);
     return { status: 'success', user: publicUser(loginUser) };
   }
-  var user = sessionUser(body.sessionHash);
+  var user;
+  if (body.firebaseUserId) {
+    user = allUsers().filter(function (account) { return account.id === body.firebaseUserId && account.active && account.passwordHash === 'firebase:komplainer:' + account.id; })[0];
+    if (!user) fail('Akun Firebase tidak aktif atau belum terhubung.', 401);
+  } else user = sessionUser(body.sessionHash);
   if (action === 'session') return { status: 'success', user: publicUser(user) };
   if (action === 'logout') { revokeSessions(null, body.sessionHash); return { status: 'success' }; }
+  if (action === 'firebasePasswordChanged') {
+    if (!body.firebaseUserId) fail('Sesi Firebase diperlukan.', 403);
+    systemSheet('Pengguna', USER_HEADERS).getRange(user.row, 9).setValue(false);
+    audit('', user, 'Password Firebase diperbarui');
+    return { status: 'success' };
+  }
   if (action === 'ownCredentials') { throttle('password:' + user.id); return { status: 'success', passwordHash: user.passwordHash }; }
   if (action === 'changePassword') {
     if (body.expectedHash !== user.passwordHash) fail('Password sudah berubah. Masuk kembali.', 409);
@@ -280,7 +309,9 @@ function handle(body) {
     if (!target) fail('Akun tidak ditemukan.', 404);
     var sheet = systemSheet('Pengguna', USER_HEADERS);
     if (action === 'resetPassword') {
-      sheet.getRange(target.row, 6).setValue(validHash(body.passwordHash));
+      var resetHash = validHash(body.passwordHash);
+      if (resetHash.indexOf('firebase:') === 0 && resetHash !== 'firebase:komplainer:' + target.id) fail('Identitas reset Firebase tidak sesuai.');
+      sheet.getRange(target.row, 6).setValue(resetHash);
       sheet.getRange(target.row, 9).setValue(true);
     } else {
       var role = body.role;
@@ -314,7 +345,7 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
-    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Tim / unit', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
+    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
     if (LEVELS.indexOf(created.status) === -1) fail('Tingkat keparahan tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
@@ -330,7 +361,7 @@ function handle(body) {
     item.tanggal = validDate(body.tanggal);
     item.dokter = textField(body.dokter, 'Dokter', true);
     if (body.rumahSakit !== undefined) item.rumahSakit = textField(body.rumahSakit, 'Rumah Sakit', false);
-    item.team = textField(body.team, 'Tim / unit', true);
+    item.team = textField(body.team, 'Team Pelapor', true);
     item.tindakan = textField(body.tindakan, 'Tindakan', true, 500);
     item.komplain = textField(body.komplain, 'Masalah', true, 5000);
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
