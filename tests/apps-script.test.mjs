@@ -7,9 +7,9 @@ test('migration preserves old rows and headers and never selects the summary she
   const row = ['OLD-1', '2026-09-30', 'Dokter lama', 'Unit lama', 'Tindakan lama', 'Masalah lama', '', 'C1 - Critical'];
   const f = createFixture({ legacyRows: [row] });
   assert.deepEqual(f.data.data[1], row);
-  assert.equal(f.data.data[0].length, 19);
+  assert.equal(f.data.data[0].length, 20);
   f.context.setupKomplainer();
-  assert.equal(f.data.data[0].length, 19);
+  assert.equal(f.data.data[0].length, 20);
   const result = f.request({ action: 'list', ...f.adminSession });
   assert.equal(result.data[0].statusPenanganan, 'Baru');
   assert.equal(result.data[0].version, 1);
@@ -146,10 +146,10 @@ test('authenticated requests create missing sheets and extend legacy summary hea
   assert.deepEqual(summary.data[1], old);
   f.properties.set('COMPLAINT_SHEET_NAME', 'Komplain Baru');
   f.context.ensureSchema();
-  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 19);
+  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 20);
   f.data.maxColumns = 8;
   f.context.ensureHeaders(f.data);
-  assert.equal(f.data.maxColumns, 19);
+  assert.equal(f.data.maxColumns, 20);
   const users = f.ss.getSheetByName('Pengguna');
   users.data[0] = users.data[0].slice(0, 8);
   users.data[1] = users.data[1].slice(0, 8);
@@ -219,4 +219,38 @@ test('reporter can set and edit a report team without changing account unit or a
   assert.equal(f.request({ action: 'session', ...reporter }).user.unit, 'Unit A');
   assert.equal(f.request({ action: 'list', ...other }).data.length, 0);
   assert.equal(f.request({ action: 'update', ...other, ...item, team: 'Unit Lain' }).code, 404);
+});
+
+test('hospital persists through create, edit and follow-up and old clients preserve it', () => {
+  const f = createFixture();
+  let item = f.createReport(f.adminSession, { rumahSakit: 'RS Harapan' }).data;
+  assert.equal(item.rumahSakit, 'RS Harapan');
+  assert.equal(f.data.data[0][19], 'Rumah Sakit');
+  assert.equal(f.data.data[1][19], 'RS Harapan');
+  item = f.request({ ...item, ...f.adminSession, action: 'update', rumahSakit: 'RS Sehat' }).data;
+  assert.equal(item.rumahSakit, 'RS Sehat');
+  const oldBody = { ...item };
+  delete oldBody.rumahSakit;
+  item = f.request({ ...oldBody, ...f.adminSession, action: 'update' }).data;
+  assert.equal(item.rumahSakit, 'RS Sehat');
+  const pic = f.addUser('hospital-pic@example.test', 'petugas');
+  item = f.request({ ...f.adminSession, action: 'assign', id: item.id, version: item.version, picId: pic.user.id }).data;
+  item = f.request({ ...pic, action: 'followUp', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Alat diganti dan diuji', catatan: 'Verifikasi selesai' }).data;
+  assert.equal(item.rumahSakit, 'RS Sehat');
+  assert.equal(item.jalanKeluar, 'Alat diganti dan diuji');
+  assert.equal(f.request({ ...f.adminSession, action: 'detail', id: item.id }).data.rumahSakit, 'RS Sehat');
+});
+
+test('existing nineteen-column sheet gains hospital header without shifting report data', () => {
+  const f = createFixture();
+  const created = f.createReport(f.adminSession).data;
+  f.data.data[0].pop();
+  f.data.data[1].pop();
+  const original = [...f.data.data[1]];
+  const result = f.request({ ...f.adminSession, action: 'detail', id: created.id });
+  assert.equal(result.status, 'success');
+  assert.deepEqual(f.data.data[1], original);
+  assert.equal(f.data.data[0][19], 'Rumah Sakit');
+  assert.equal(result.data.rumahSakit, '');
+  assert.equal(result.data.version, created.version);
 });

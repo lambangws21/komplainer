@@ -6,7 +6,7 @@
  * Accounts are created from the application; Password Hash stores scrypt hashes, not passwords.
  */
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
-var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi']);
+var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit']);
 var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Aktif', 'Dibuat Pada', 'Wajib Ganti Password'];
 var SESSION_HEADERS = ['Token Hash', 'User ID', 'Expires At'];
 var HISTORY_HEADERS = ['ID', 'Komplain ID', 'Tanggal', 'User ID', 'Nama', 'Aksi', 'Catatan', 'Detail'];
@@ -175,7 +175,7 @@ function audit(id, user, action, note, detail) {
   systemSheet('Riwayat', HISTORY_HEADERS).appendRow(safeRow([Utilities.getUuid(), id, nowIso(), user.id, user.nama, action, note || '', JSON.stringify(detail || {})]));
 }
 function report(row, index) {
-  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, row: index + 2 };
+  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), row: index + 2 };
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
 function publicReport(item, accounts) {
@@ -196,7 +196,7 @@ function findReport(id, user) {
 }
 function checkVersion(item, body) { if (Number(body.version) !== item.version) fail('Laporan sudah diperbarui pengguna lain. Muat ulang data lalu ulangi perubahan.', 409); }
 function writeReport(item) {
-  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version];
+  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || ''];
   dataSheet().getRange(item.row, 1, 1, HEADERS.length).setValues([safeRow(values)]);
 }
 function history(id) {
@@ -314,7 +314,7 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
-    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), team: textField(body.team, 'Tim / unit', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
+    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Tim / unit', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
     if (LEVELS.indexOf(created.status) === -1) fail('Tingkat keparahan tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
@@ -329,6 +329,7 @@ function handle(body) {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
     item.tanggal = validDate(body.tanggal);
     item.dokter = textField(body.dokter, 'Dokter', true);
+    if (body.rumahSakit !== undefined) item.rumahSakit = textField(body.rumahSakit, 'Rumah Sakit', false);
     item.team = textField(body.team, 'Tim / unit', true);
     item.tindakan = textField(body.tindakan, 'Tindakan', true, 500);
     item.komplain = textField(body.komplain, 'Masalah', true, 5000);

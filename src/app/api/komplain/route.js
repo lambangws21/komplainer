@@ -11,7 +11,7 @@ export async function POST(request) {
     assertSameOrigin(request);
     const body = await readBody(request);
     if (!['create', 'update', 'delete', 'assign', 'followUp', 'reopen'].includes(body.action)) throw new ApiError('Aksi laporan tidak valid.');
-    const keys = ['id', 'version', 'tanggal', 'dokter', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'status', 'statusPenanganan', 'picId', 'tenggat', 'catatan', 'requestId'];
+    const keys = ['id', 'version', 'tanggal', 'dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'status', 'statusPenanganan', 'picId', 'tenggat', 'catatan', 'requestId'];
     const payload = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
     return json(await callScript(body.action, payload));
   } catch (error) { return errorResponse(error); }
