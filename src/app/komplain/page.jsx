@@ -93,6 +93,7 @@ export default function KomplainPage() {
   const [showPicHistory, setShowPicHistory] = useState(false);
   const [showSolutionField, setShowSolutionField] = useState(false);
   const [showNextPlanField, setShowNextPlanField] = useState(false);
+  const [showNoteField, setShowNoteField] = useState(false);
   const [picHistory, setPicHistory] = useState([]);
   const [picDetailLoading, setPicDetailLoading] = useState(false);
   const [picDetailError, setPicDetailError] = useState('');
@@ -204,16 +205,16 @@ export default function KomplainPage() {
   }
   function openWorkflow(mode, item) {
     setWorkflowItem(item);
-    setWorkflow({ picId: mode === 'selfAssign' ? user.id : item.picId || '', tenggat: item.tenggat || '', statusPenanganan: handlingStatus(item) === 'Baru' ? 'Diproses' : handlingStatus(item), jalanKeluar: item.jalanKeluar || '', penangananSelanjutnya: item.penangananSelanjutnya || '', catatan: '' });
+    setWorkflow({ picId: mode === 'selfAssign' ? user.id : item.picId || '', tenggat: item.tenggat || '', statusPenanganan: handlingStatus(item) === 'Baru' ? 'Menunggu' : handlingStatus(item), jalanKeluar: item.jalanKeluar || '', penangananSelanjutnya: item.penangananSelanjutnya || '', catatan: '' });
     openModal(mode);
   }
   async function openPicAction(item) {
     markRead(item.id);
-    setShowPicDetail(false); setShowPicHistory(false);
+    setShowPicDetail(false); setShowPicHistory(false); setShowNoteField(false);
     setShowSolutionField(!!item.jalanKeluar || handlingStatus(item) === 'Selesai');
     setShowNextPlanField(!!item.penangananSelanjutnya);
     setWorkflowItem(item);
-    setWorkflow({ picId: item.picId || '', tenggat: item.tenggat || '', statusPenanganan: handlingStatus(item) === 'Baru' ? 'Diproses' : handlingStatus(item), jalanKeluar: item.jalanKeluar || '', penangananSelanjutnya: item.penangananSelanjutnya || '', catatan: '' });
+    setWorkflow({ picId: item.picId || '', tenggat: item.tenggat || '', statusPenanganan: handlingStatus(item) === 'Baru' ? 'Menunggu' : handlingStatus(item), jalanKeluar: item.jalanKeluar || '', penangananSelanjutnya: item.penangananSelanjutnya || '', catatan: '' });
     openModal('picAction');
     const version = ++picDetailVersion.current;
     setPicHistory([]); setPicDetailError(''); setPicDetailLoading(true);
@@ -223,7 +224,7 @@ export default function KomplainPage() {
         setWorkflowItem(result.data);
         setShowSolutionField((previous) => previous || !!result.data.jalanKeluar);
         setShowNextPlanField((previous) => previous || !!result.data.penangananSelanjutnya);
-        setWorkflow((previous) => ({ ...previous, statusPenanganan: handlingStatus(result.data) === 'Baru' ? 'Diproses' : handlingStatus(result.data), jalanKeluar: result.data.jalanKeluar || '', penangananSelanjutnya: result.data.penangananSelanjutnya || '' }));
+        setWorkflow((previous) => ({ ...previous, statusPenanganan: handlingStatus(result.data) === 'Baru' ? 'Menunggu' : handlingStatus(result.data), jalanKeluar: result.data.jalanKeluar || '', penangananSelanjutnya: result.data.penangananSelanjutnya || '' }));
         setPicHistory(result.history || []);
       }
     } catch (error) { if (version === picDetailVersion.current) { setPicDetailError(error.message); if (error.code === 401) endSession(); } }
@@ -302,11 +303,11 @@ export default function KomplainPage() {
       </div>
       <form onSubmit={(event) => { event.preventDefault(); mutate('followUp'); }} className="space-y-4 border-t border-slate-800 pt-4">
         <h3 className="font-semibold">Tindak lanjut</h3>
-        <div><label htmlFor="pic-status" className="mb-2 block text-sm">Status penanganan</label><select id="pic-status" value={workflow.statusPenanganan} onChange={(event) => { const next = event.target.value; setWorkflow({ ...workflow, statusPenanganan: next }); if (next === 'Selesai') setShowSolutionField(true); }} className={inputClass}>{['Diproses', 'Menunggu', 'Selesai'].map((status) => <option key={status}>{status}</option>)}</select></div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950 px-3 py-3"><div><p className="text-sm font-medium">Tandai laporan ini selesai</p><p className="mt-0.5 text-xs text-slate-400">{workflow.statusPenanganan === 'Selesai' ? 'Status akan disimpan sebagai Selesai.' : 'Status akan disimpan sebagai Menunggu.'}</p></div><label className="relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center"><input type="checkbox" className="peer sr-only" checked={workflow.statusPenanganan === 'Selesai'} onChange={(event) => { const checked = event.target.checked; setWorkflow({ ...workflow, statusPenanganan: checked ? 'Selesai' : 'Menunggu' }); if (checked) setShowSolutionField(true); }} /><span className="h-7 w-12 rounded-full bg-slate-700 transition peer-checked:bg-emerald-600" /><span className="absolute left-1 h-5 w-5 rounded-full bg-white transition peer-checked:translate-x-5" /></label></div>
         {showSolutionField ? <div><label htmlFor="pic-solution" className="mb-2 block text-sm">Penyelesaian tindak lanjut {workflow.statusPenanganan === 'Selesai' ? '*' : '(opsional)'}</label><FormattingToolbar getTextarea={() => textareaRefs.current.picSolution} value={workflow.jalanKeluar} onChange={(next) => setWorkflow({ ...workflow, jalanKeluar: next })} controls="pic-solution" /><GrowingTextarea ref={(el) => { textareaRefs.current.picSolution = el; }} id="pic-solution" placeholder="Jelaskan solusi dan hasil penanganannya…" rows={2} maxLength={5000} required={workflow.statusPenanganan === 'Selesai'} value={workflow.jalanKeluar} onChange={(event) => setWorkflow({ ...workflow, jalanKeluar: event.target.value })} className={inputClass} /></div> : <button type="button" onClick={() => setShowSolutionField(true)} className="flex items-center gap-1.5 text-sm text-blue-300 hover:underline"><PlusCircle aria-hidden="true" className="h-4 w-4" />Tambah penyelesaian tindak lanjut</button>}
         {lastNote && <div className="rounded-xl border-l-4 border-amber-400 bg-amber-500/15 p-3"><p className="text-xs font-semibold text-amber-200">Komentar terakhir Anda · {new Date(lastNote.tanggal).toLocaleString('id-ID')}</p><FormattedText text={lastNote.catatan} className="mt-1 text-sm leading-6 text-amber-50" /></div>}
         {showNextPlanField ? <div><label htmlFor="pic-next" className="mb-2 block text-sm">Penanganan selanjutnya (opsional)</label><FormattingToolbar getTextarea={() => textareaRefs.current.picNext} value={workflow.penangananSelanjutnya} onChange={(next) => setWorkflow({ ...workflow, penangananSelanjutnya: next })} controls="pic-next" /><GrowingTextarea ref={(el) => { textareaRefs.current.picNext = el; }} id="pic-next" placeholder="Rencana tindak lanjut ke depan, jika ada…" rows={2} maxLength={5000} value={workflow.penangananSelanjutnya} onChange={(event) => setWorkflow({ ...workflow, penangananSelanjutnya: event.target.value })} className={inputClass} /></div> : <button type="button" onClick={() => setShowNextPlanField(true)} className="flex items-center gap-1.5 text-sm text-blue-300 hover:underline"><PlusCircle aria-hidden="true" className="h-4 w-4" />Tambah penanganan selanjutnya</button>}
-        <div><label htmlFor="pic-note" className="mb-2 block text-sm">Catatan tindak lanjut *</label><FormattingToolbar getTextarea={() => textareaRefs.current.picNote} value={workflow.catatan} onChange={(next) => setWorkflow({ ...workflow, catatan: next })} controls="pic-note" /><GrowingTextarea ref={(el) => { textareaRefs.current.picNote = el; }} id="pic-note" placeholder="Tuliskan perkembangan penanganan…" rows={2} maxLength={2000} required value={workflow.catatan} onChange={(event) => setWorkflow({ ...workflow, catatan: event.target.value })} className={inputClass} /></div>
+        {showNoteField ? <div><label htmlFor="pic-note" className="mb-2 block text-sm">Catatan tindak lanjut (opsional)</label><FormattingToolbar getTextarea={() => textareaRefs.current.picNote} value={workflow.catatan} onChange={(next) => setWorkflow({ ...workflow, catatan: next })} controls="pic-note" /><GrowingTextarea ref={(el) => { textareaRefs.current.picNote = el; }} id="pic-note" placeholder="Tuliskan perkembangan penanganan…" rows={2} maxLength={2000} value={workflow.catatan} onChange={(event) => setWorkflow({ ...workflow, catatan: event.target.value })} className={inputClass} /></div> : <button type="button" onClick={() => setShowNoteField(true)} className="flex items-center gap-1.5 text-sm text-blue-300 hover:underline"><PlusCircle aria-hidden="true" className="h-4 w-4" />Tambah catatan tindak lanjut</button>}
         <div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button disabled={busy} className={`${buttonClass} flex-1 bg-blue-600`}>{busy ? 'Menyimpan…' : 'Simpan tindak lanjut'}</button></div>
       </form>
       <div className="border-t border-slate-800 pt-4">

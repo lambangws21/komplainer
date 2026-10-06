@@ -447,7 +447,6 @@ function handle(body) {
     if (item.statusPenanganan === 'Selesai') fail('Laporan sudah selesai. Gunakan Buka kembali untuk melanjutkan.', 409);
     if (['Diproses', 'Menunggu', 'Selesai'].indexOf(body.statusPenanganan) === -1) fail('Status penanganan tidak valid.');
     if (!item.picId) fail('Tentukan PIC sebelum memperbarui penanganan.');
-    if (!note) fail('Catatan tindak lanjut wajib diisi.');
     item.statusPenanganan = body.statusPenanganan;
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
