@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { PlusCircle, X, CheckCircle2, Lightbulb, AlertTriangle } from 'lucide-react';
+import { PlusCircle, X, CheckCircle2, Lightbulb, AlertTriangle, UserRound, Inbox } from 'lucide-react';
 import DataView from './data-view';
 import './theme.css';
 import { useDialogViewport } from './use-dialog-viewport';
@@ -68,6 +68,10 @@ export default function KomplainPage() {
   const requestVersion = useRef(0);
   const mutationLock = useRef(false);
   const draftRequestId = useRef(null);
+  const previousListRef = useRef(null);
+  const userRef = useRef(null);
+  const [assignedNotice, setAssignedNotice] = useState([]);
+  const [incomingNotice, setIncomingNotice] = useState([]);
   const [tab, setTab] = useState('form');
   const [modal, setModal] = useState(null);
   const dialogStyle = useDialogViewport(modal !== null);
@@ -91,10 +95,13 @@ export default function KomplainPage() {
 
   const endSession = useCallback((notice = 'Sesi berakhir. Silakan masuk kembali.') => {
     requestVersion.current += 1;
+    previousListRef.current = null;
     setUser(null); setList([]); setAssignees([]); setLoaded(false); setLoading(false);
     setModal(null); setEditItem(null); setWorkflowItem(null); setForm(newForm());
+    setAssignedNotice([]); setIncomingNotice([]);
     setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
   }, []);
+  useEffect(() => { userRef.current = user; }, [user]);
   useEffect(() => {
     let alive = true;
     apiRequest('/api/auth/session').then((result) => { if (alive) setUser(result.user); })
@@ -102,18 +109,40 @@ export default function KomplainPage() {
       .finally(() => { if (alive) setAuthChecking(false); });
     return () => { alive = false; requestVersion.current += 1; };
   }, []);
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options = {}) => {
+    const { silent = false } = options;
     const version = ++requestVersion.current;
-    setLoading(true); setLoadError('');
+    if (!silent) { setLoading(true); setLoadError(''); }
     try {
       const result = await apiRequest('/api/komplain');
       if (!Array.isArray(result.data)) throw new Error('Format data laporan tidak valid.');
-      if (version === requestVersion.current) { setList(result.data); setAssignees(result.assignees || []); setLoaded(true); }
+      if (version === requestVersion.current) {
+        const activeUser = userRef.current;
+        const previous = previousListRef.current;
+        if (previous && activeUser) {
+          const prevMap = new Map(previous.map((item) => [item.id, item]));
+          const newlyAssigned = []; const newlyArrived = [];
+          for (const item of result.data) {
+            const prevItem = prevMap.get(item.id);
+            if (item.pelaporId === activeUser.id && item.picId && !prevItem?.picId) newlyAssigned.push(item);
+            if (!prevItem && item.pelaporId !== activeUser.id && ['admin', 'petugas'].includes(activeUser.role)) newlyArrived.push(item);
+          }
+          if (newlyAssigned.length) setAssignedNotice((queue) => [...queue, ...newlyAssigned]);
+          if (newlyArrived.length) setIncomingNotice((queue) => [...queue, ...newlyArrived]);
+        }
+        previousListRef.current = result.data;
+        setList(result.data); setAssignees(result.assignees || []); setLoaded(true);
+      }
     } catch (error) {
-      if (version === requestVersion.current) { if (error.code === 401) endSession(); else setLoadError(error.message); }
-    } finally { if (version === requestVersion.current) setLoading(false); }
+      if (version === requestVersion.current) { if (error.code === 401) endSession(); else if (!silent) setLoadError(error.message); }
+    } finally { if (version === requestVersion.current && !silent) setLoading(false); }
   }, [endSession]);
   useEffect(() => { if (user?.id && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword) fetchData(); }, [user?.id, user?.approval, user?.mustChangePassword, fetchData]);
+  useEffect(() => {
+    if (!user?.id || user.approval === 'pending' || user.approval === 'rejected' || user.mustChangePassword) return undefined;
+    const interval = setInterval(() => { if (document.visibilityState === 'visible') fetchData({ silent: true }); }, 60000);
+    return () => clearInterval(interval);
+  }, [user?.id, user?.approval, user?.mustChangePassword, fetchData]);
 
   function openModal(next) { modalReturnFocus.current = document.activeElement; setActionError(''); setModal(next); }
   function openForm(item) {
@@ -229,6 +258,18 @@ export default function KomplainPage() {
     </div>; })()}
     {modal === 'delete' && <div className="mt-5 space-y-5"><div className="flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/20 p-4"><AlertTriangle aria-hidden="true" className="h-6 w-6 shrink-0 text-red-400" /><p className="break-words text-sm leading-6">Laporan <strong>{workflowItem?.dokter}</strong> · {formatDate(workflowItem?.tanggal)}</p></div><div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button disabled={busy} onClick={() => mutate('delete')} className={`${buttonClass} flex-1 bg-red-700`}>{busy ? 'Mengarsipkan…' : 'Arsipkan laporan'}</button></div></div>}
     {modal === 'success' && <div className="mt-5 flex flex-col items-center gap-4 py-2 text-center"><span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-emerald-500/15"><CheckCircle2 aria-hidden="true" className="h-10 w-10 text-emerald-400" /></span><p className="break-words text-sm leading-6 text-slate-300">{successText}</p><Dialog.Close className={`${buttonClass} w-full bg-blue-600`}>Tutup</Dialog.Close></div>}
+    </div>
+  </Dialog.Content></Dialog.Portal></Dialog.Root>
+  <Dialog.Root open={assignedNotice.length > 0 && modal === null} onOpenChange={(open) => { if (!open) setAssignedNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
+    <div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Laporan Anda sudah ditangani</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">Penanggung jawab (PIC) baru ditentukan untuk {assignedNotice.length > 1 ? `${assignedNotice.length} laporan Anda` : 'laporan Anda'}.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
+    <div className={`${dialogBody} space-y-3 pt-4`}>{assignedNotice.map((item) => <div key={item.id} className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-3"><p className="flex items-center gap-1.5 text-sm font-semibold"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-violet-300" />{item.dokter} · {item.tindakan}</p><p className="mt-1 break-words text-sm text-slate-300">Ditangani oleh <strong>{item.picNama}</strong>{item.tenggat ? ` · Tenggat ${formatDate(item.tenggat)}` : ''}</p></div>)}
+      <div className={formFooter}><Dialog.Close className={`${buttonClass} flex-1 bg-slate-800`}>Tutup</Dialog.Close><button onClick={() => { setAssignedNotice([]); setTab('table'); }} className={`${buttonClass} flex-1 bg-blue-600`}>Lihat laporan saya</button></div>
+    </div>
+  </Dialog.Content></Dialog.Portal></Dialog.Root>
+  <Dialog.Root open={incomingNotice.length > 0 && assignedNotice.length === 0 && modal === null} onOpenChange={(open) => { if (!open) setIncomingNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
+    <div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Laporan baru masuk</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{incomingNotice.length > 1 ? `${incomingNotice.length} laporan baru` : '1 laporan baru'} sejak terakhir Anda membuka halaman ini.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
+    <div className={`${dialogBody} space-y-3 pt-4`}>{incomingNotice.map((item) => <div key={item.id} className="rounded-xl border border-blue-900/50 bg-blue-950/20 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-1.5 text-sm font-semibold"><Inbox aria-hidden="true" className="h-4 w-4 shrink-0 text-blue-300" />{item.dokter} · {item.tindakan}</p><Badge status={item.status} /></div><p className="mt-1 break-words text-sm text-slate-300">Dilaporkan oleh <strong>{item.pelaporNama || 'Pengguna'}</strong> · {formatDate(item.tanggal)}</p></div>)}
+      <div className={formFooter}><Dialog.Close className={`${buttonClass} flex-1 bg-slate-800`}>Tutup</Dialog.Close><button onClick={() => { setIncomingNotice([]); setTab('table'); }} className={`${buttonClass} flex-1 bg-blue-600`}>Lihat semua laporan</button></div>
     </div>
   </Dialog.Content></Dialog.Portal></Dialog.Root>
   </main>;

@@ -38,6 +38,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState('Semua');
   const [workflowFilter, setWorkflowFilter] = useState('Semua');
+  const [onlyMine, setOnlyMine] = useState(false);
   const [period, setPeriod] = useState('all');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
@@ -66,14 +67,15 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     const source = period === 'period' ? summary.current : list;
     const query = search.trim().toLocaleLowerCase('id-ID');
     const hasRange = !!(rangeStart && rangeEnd);
-    return source.filter((item) => (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || String(item.status || '').split(' - ')[0] === level) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
+    return source.filter((item) => (!onlyMine || item.picId === user.id) && (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || String(item.status || '').split(' - ')[0] === level) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
       .sort((a, b) => {
         const first = dateKey(a.tanggal), second = dateKey(b.tanggal);
         if (!first) return second ? 1 : 0;
         if (!second) return -1;
         return sort === 'newest' ? second.localeCompare(first) : first.localeCompare(second);
       });
-  }, [list, summary, search, level, workflowFilter, period, rangeStart, rangeEnd, sort]);
+  }, [list, summary, search, level, workflowFilter, onlyMine, user.id, period, rangeStart, rangeEnd, sort]);
+  const myTaskCount = useMemo(() => list.filter((item) => item.picId === user.id).length, [list, user.id]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -83,7 +85,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const ready = loaded;
   const shown = (value) => ready ? value : '—';
   const periodLabel = periodMode === 'week' ? 'minggu' : 'bulan';
-  const reset = () => { setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setPeriod('all'); setRangeStart(''); setRangeEnd(''); setPage(1); };
+  const reset = () => { setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setOnlyMine(false); setPeriod('all'); setRangeStart(''); setRangeEnd(''); setPage(1); };
   const selectPeriod = (date) => { const start = periodMode === 'week' ? weekStart(date) : date; if (start) { setSelectedDate(start); setPage(1); } };
   const viewPeriodReports = () => { setPeriod('period'); setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setPage(1); setView('table'); tableViewButton.current?.focus(); };
   function exportFiltered() {
@@ -142,7 +144,9 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <label className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="sr-only">Urutkan laporan</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={input}><option value="newest">Tanggal terbaru</option><option value="oldest">Tanggal terlama</option></select></label>
         </div>
 
-        <div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}</div>
+        <div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}
+          <button type="button" aria-pressed={onlyMine} onClick={() => { setOnlyMine((value) => !value); setPage(1); }} className={`${control} ${onlyMine ? 'bg-violet-600' : 'bg-slate-800 text-slate-300'}`}><UserRound aria-hidden="true" className="h-4 w-4" />Tugas saya{myTaskCount > 0 && ` (${myTaskCount})`}</button>
+        </div>
 
         <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Status penanganan</span><select className={input} value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value); setPage(1); }}><option value="Semua">Semua status</option>{WORKFLOW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
@@ -151,7 +155,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
         </div>
         {period === 'period' && <div className="space-y-3 rounded-xl border border-blue-900/60 bg-blue-950/20 p-3"><p className="text-sm text-blue-200">{formatDate(summary.start)} – {formatDate(summary.end)}</p>{periodPicker}</div>}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><div className="flex flex-wrap items-center gap-2">{(search || level !== 'Semua' || workflowFilter !== 'Semua' || period !== 'all' || (rangeStart && rangeEnd)) && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Export Excel (CSV)</button></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><div className="flex flex-wrap items-center gap-2">{(search || level !== 'Semua' || workflowFilter !== 'Semua' || onlyMine || period !== 'all' || (rangeStart && rangeEnd)) && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Export Excel (CSV)</button></div></div>
       </div>
       {rows.length > 0 && <>
         <div tabIndex={0} role="region" aria-label="Tabel laporan komplain, geser untuk melihat semua kolom" className="hidden overflow-x-auto border-y border-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 md:block"><table className="w-full min-w-[1180px] table-fixed text-left text-sm"><caption className="sr-only">Laporan komplain diurutkan berdasarkan tanggal. Gunakan tombol detail untuk membaca masalah dan solusi lengkap.</caption><thead className="bg-slate-950/70 text-xs uppercase tracking-wider text-slate-400"><tr>{[['Dokter', 'w-44'], ['Rumah Sakit', 'w-32'], ['Masalah', ''], ['PIC', 'w-36'], ['Tanggal / Tenggat', 'w-28'], ['Tingkat', 'w-28'], ['Status', 'w-36'], ['Aksi', 'w-36']].map(([label, width]) => <th key={label} scope="col" className={`px-4 py-3 font-medium ${width}`}>{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{rows.map((item, index) => item.restricted ? <tr key={item.id ?? index} className="bg-slate-950/40"><td colSpan={4} className="px-4 py-3.5 align-top"><p className="flex items-center gap-1.5 text-sm text-slate-500"><Lock aria-hidden="true" className="h-4 w-4 shrink-0" />Dilaporkan pengguna lain, isi laporan tidak dapat diakses</p><p className="mt-1 break-words text-xs text-slate-500">RS: {item.rumahSakit || 'Belum diisi'} · Team: {item.team || 'Belum diisi'}</p></td><td className="px-4 py-3.5 align-top text-slate-400">{formatDate(item.tanggal)}</td><td className="px-4 py-3.5 align-top"><Badge status={item.status} /></td><td className="px-4 py-3.5 align-top"><WorkflowBadge status={handlingStatus(item)} /></td><td className="px-4 py-3.5 align-top">{actions(item)}</td></tr> : <tr key={item.id ?? index} className={`transition hover:bg-slate-800/40 ${index % 2 === 1 ? 'bg-slate-900/40' : ''}`}>
