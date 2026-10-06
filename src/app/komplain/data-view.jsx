@@ -4,7 +4,7 @@ import { useDialogViewport } from './use-dialog-viewport';
 import { mobileDialog, dialogHeader, dialogBody, historyNote } from './ui-styles.mjs';
 import FormattedText from './formatted-text';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, CalendarDays, Table2, BarChart3, ArrowDownUp, Download, Lock, AlertCircle, Wrench, ListChecks } from 'lucide-react';
 import { dateKey, shiftDate, shiftMonth, summarizeWeek, summarizeMonth, weekStart } from './weekly-summary.mjs';
@@ -34,7 +34,7 @@ function Avatar({ name }) {
   return <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">{initials(name)}</span>;
 }
 
-export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onOpenPicAction, onReopen, onExpired, onMarkRead }) {
+export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onOpenPicAction, onReopen, onExpired, onMarkRead, pendingDetailId, onPendingDetailHandled }) {
   const [view, setView] = useState('table');
   const [periodMode, setPeriodMode] = useState('week');
   const [selectedDate, setSelectedDate] = useState(() => weekStart(today()));
@@ -68,6 +68,13 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     } catch (error) { if (version === detailVersion.current) { setDetailError(error.message); if (error.code === 401) onExpired(); } }
     finally { if (version === detailVersion.current) setDetailLoading(false); }
   };
+  useEffect(() => {
+    if (!pendingDetailId) return;
+    const item = list.find((entry) => entry.id === pendingDetailId);
+    if (item) openDetail(item);
+    onPendingDetailHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDetailId]);
   const summary = useMemo(() => (periodMode === 'week' ? summarizeWeek(list, selectedDate) : summarizeMonth(list, selectedDate)), [list, selectedDate, periodMode]);
   const filtered = useMemo(() => {
     const source = period === 'period' ? summary.current : list;
@@ -180,7 +187,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
         <div tabIndex={0} role="region" aria-label="Tabel laporan komplain, geser untuk melihat semua kolom" className="hidden overflow-x-auto border-y border-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 md:block"><table className="w-full min-w-[1180px] table-fixed text-left text-sm"><caption className="sr-only">Laporan komplain diurutkan berdasarkan tanggal. Gunakan tombol detail untuk membaca masalah dan solusi lengkap.</caption><thead className="bg-slate-950/70 text-xs uppercase tracking-wider text-slate-400"><tr>{[['Dokter', 'w-44'], ['Rumah Sakit', 'w-32'], ['Masalah', ''], ['PIC', 'w-36'], ['Tanggal / Tenggat', 'w-28'], ['Tingkat', 'w-28'], ['Status', 'w-36'], ['Aksi', 'w-36']].map(([label, width]) => <th key={label} scope="col" className={`px-4 py-3 font-medium ${width}`}>{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{rows.map((item, index) => item.restricted ? <tr key={item.id ?? index} className="bg-slate-950/40"><td colSpan={4} className="px-4 py-3.5 align-top"><p className="flex items-center gap-1.5 text-sm text-slate-500"><Lock aria-hidden="true" className="h-4 w-4 shrink-0" />Dilaporkan pengguna lain, isi laporan tidak dapat diakses</p><p className="mt-1 break-words text-xs text-slate-500">RS: {item.rumahSakit || 'Belum diisi'} · Team: {item.team || 'Belum diisi'}</p></td><td className="px-4 py-3.5 align-top text-slate-400">{formatDate(item.tanggal)}</td><td className="px-4 py-3.5 align-top"><Badge status={item.status} /></td><td className="px-4 py-3.5 align-top"><WorkflowBadge status={handlingStatus(item)} /></td><td className="px-4 py-3.5 align-top">{actions(item)}</td></tr> : <tr key={item.id ?? index} className={`transition hover:bg-slate-800/40 ${index % 2 === 1 ? 'bg-slate-900/40' : ''}`}>
           <td className="px-4 py-3.5 align-middle"><div className="flex min-w-0 items-center gap-2.5"><Avatar name={item.dokter} /><div className="min-w-0"><p className="truncate font-semibold text-white">{item.dokter || '—'}</p><p className="truncate text-xs text-slate-400">{item.team || 'Team belum diisi'}</p></div></div></td>
           <td className="px-4 py-3.5 align-middle truncate text-slate-300">{item.rumahSakit || '—'}</td>
-          <td className="px-4 py-3.5 align-middle"><p className="truncate text-xs font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</p><div className="mt-1"><ImplantBadge item={item} compact /></div><p className="mt-1 line-clamp-2 break-words leading-snug text-slate-300">{item.komplain || '—'}</p><button onClick={() => openDetail(item)} className="mt-1 inline-flex items-center text-xs font-semibold text-blue-300 hover:underline">Lihat detail</button></td>
+          <td className="px-4 py-3.5 align-middle"><p className="truncate text-xs font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</p><div className="mt-1"><ImplantBadge item={item} compact /></div><p className="mt-1 line-clamp-2 break-words leading-snug text-slate-300">{item.komplain || '—'}</p>{item.jalanKeluar && <p className="mt-1 line-clamp-2 break-words text-xs leading-snug text-emerald-300"><span className="font-semibold">Respons PIC:</span> {item.jalanKeluar}</p>}<button onClick={() => openDetail(item)} className="mt-1 inline-flex items-center text-xs font-semibold text-blue-300 hover:underline">Lihat detail</button></td>
           <td className="px-4 py-3.5 align-middle">{item.picId ? <div className="flex min-w-0 items-center gap-1.5"><RoleBadge role={item.picRole} pic /><span className="truncate text-xs text-slate-300">{item.picNama}</span></div> : <span className="text-xs text-slate-500">Belum ditugaskan</span>}</td>
           <td className="px-4 py-3.5 align-middle"><p className="text-xs text-slate-300">{formatDate(item.tanggal)}</p>{item.tenggat && <p className={`mt-0.5 text-xs ${isOverdue(item, today()) ? 'font-semibold text-red-300' : 'text-slate-500'}`}>{isOverdue(item, today()) ? 'Terlambat' : formatDate(item.tenggat)}</p>}</td>
           <td className="px-4 py-3.5 align-middle"><Badge status={item.status} /></td>
@@ -192,7 +199,8 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <div className="mt-2 flex flex-wrap gap-1.5"><Badge status={item.status} /><AlertBadge item={item} onClick={alertAction(item)} /></div>
           <p className="mt-2 truncate text-xs text-slate-400">RS: {item.rumahSakit || 'Belum diisi'} · PIC: {item.picNama || 'Belum ditugaskan'}</p>
           {item.tenggat && <p className={`mt-1 text-xs ${isOverdue(item, today()) ? 'font-semibold text-red-300' : 'text-slate-400'}`}>Tenggat: {formatDate(item.tenggat)}{isOverdue(item, today()) ? ' · Terlambat' : ''}</p>}
-          <p className="mt-2 truncate text-sm text-slate-300">{item.tindakan || '—'}{(item.jalanKeluar || item.komplain) ? ` | ${item.jalanKeluar || item.komplain}` : ''}</p>
+          <p className="mt-2 line-clamp-2 break-words text-sm text-slate-300"><span className="font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</span>{item.komplain ? ` — ${item.komplain}` : ''}</p>
+          {item.jalanKeluar && <p className="mt-1 line-clamp-2 break-words text-xs text-emerald-300"><span className="font-semibold">Respons PIC:</span> {item.jalanKeluar}</p>}
           <div className="mt-1.5"><ImplantBadge item={item} /></div>
           <div className="mt-3 border-t border-slate-800 pt-3">{actions(item, true)}</div>
         </article>)}</div>
