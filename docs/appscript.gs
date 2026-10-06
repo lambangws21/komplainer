@@ -191,7 +191,8 @@ function publicReport(item, accounts) {
   delete result.row;
   return result;
 }
-function canRead(item, user) { return user.role === 'admin' || item.pelaporId === user.id || item.picId === user.id; }
+// Petugas (PIC) are collectively responsible for triage and decisions on every incoming case.
+function canRead(item, user) { return user.role === 'admin' || user.role === 'petugas' || item.pelaporId === user.id || item.picId === user.id; }
 // Other users may see that a case exists and its status, never its content.
 function summaryReport(item) { return { id: item.id, tanggal: item.tanggal, team: item.team, rumahSakit: item.rumahSakit, status: item.status, statusPenanganan: item.statusPenanganan, tenggat: item.tenggat, updatedAt: item.updatedAt, restricted: true }; }
 function findReport(id, user) {
@@ -431,7 +432,9 @@ function handle(body) {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
     item.deletedAt = nowIso();
   } else if (action === 'assign') {
-    requireAdmin(user);
+    // A petugas may pick up a case with no PIC yet; reassigning an already-handled case stays admin-only.
+    var selfAssign = user.role === 'petugas' && !item.picId && body.picId === user.id;
+    if (!selfAssign) requireAdmin(user);
     if (item.statusPenanganan === 'Selesai') fail('Buka kembali laporan sebelum mengubah penugasan.', 409);
     var pic = allUsers().filter(function (target) { return target.id === body.picId && (target.role === 'petugas' || target.role === 'pelapor') && target.active; })[0];
     if (body.picId && !pic) fail('PIC harus merupakan petugas atau pelapor aktif.');
@@ -447,6 +450,7 @@ function handle(body) {
     if (!note) fail('Catatan tindak lanjut wajib diisi.');
     item.statusPenanganan = body.statusPenanganan;
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
+    if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     item.selesaiPada = item.statusPenanganan === 'Selesai' ? nowIso() : '';
   } else if (action === 'reopen') {
     if (user.role !== 'admin' && item.pelaporId !== user.id) fail('Hanya admin atau pelapor dapat membuka kembali laporan.', 403);

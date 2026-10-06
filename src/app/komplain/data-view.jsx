@@ -18,7 +18,7 @@ const control = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-
 const input = 'min-w-0 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-base text-white focus:outline-none focus:ring-2 focus:ring-blue-400';
 const PAGE_SIZE = 10;
 
-export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onFollowUp, onReopen, onExpired }) {
+export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onFollowUp, onReopen, onExpired }) {
   const [view, setView] = useState('table');
   const [periodMode, setPeriodMode] = useState('week');
   const [selectedDate, setSelectedDate] = useState(() => weekStart(today()));
@@ -77,6 +77,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     <button aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={`${control} px-3 text-blue-300 hover:bg-blue-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail</span>}</button>
     {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Edit laporan ${item.dokter || ''}`} onClick={() => onEdit(item)} className={`${control} px-3 text-slate-300 hover:bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Edit</span>}</button>}
     {user.role === 'admin' && handlingStatus(item) !== 'Selesai' && <button disabled={busy} aria-label={`Tentukan PIC ${item.dokter || ''}`} onClick={() => onAssign(item)} className={`${control} px-3 text-violet-300 hover:bg-violet-500/10`}><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Tentukan PIC</span>}</button>}
+    {user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' && <button disabled={busy} aria-label={`Ambil laporan ${item.dokter || ''} sebagai PIC`} onClick={() => onSelfAssign(item)} className={`${control} px-3 text-violet-300 hover:bg-violet-500/10`}><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Ambil sebagai PIC</span>}</button>}
     {canFollowUp(item, user) && <button disabled={busy} aria-label={`Tindak lanjut ${item.dokter || ''}`} onClick={() => onFollowUp(item)} className={`${control} px-3 text-emerald-300 hover:bg-emerald-500/10`}><MessageCircle aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Tindak lanjut</span>}</button>}
     {canReopen(item, user) && <button disabled={busy} aria-label={`Buka kembali ${item.dokter || ''}`} onClick={() => onReopen(item)} className={`${control} px-3 text-amber-300 hover:bg-amber-500/10`}><RotateCcw aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Buka kembali</span>}</button>}
     {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Arsipkan laporan ${item.dokter || ''}`} onClick={() => onDelete(item)} className={`${control} px-3 text-slate-300 hover:bg-red-500/10 hover:text-red-300`}><Archive aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Arsipkan</span>}</button>}

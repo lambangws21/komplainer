@@ -274,6 +274,39 @@ test('report owner can delete their own untouched report, but not once handling 
   assert.equal(f.request({ action: 'delete', ...owner, id: inProgress.id, version: inProgress.version }).code, 403);
   assert.equal(f.request({ action: 'delete', ...f.adminSession, id: inProgress.id, version: inProgress.version }).status, 'success');
 });
+test('every petugas can read full report content, not just assigned cases', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner@example.test');
+  const unassignedPetugas = f.addUser('triage@example.test', 'petugas');
+  const item = f.createReport(owner, { dokter: 'dr. Rahasia', komplain: 'Isi rahasia' }).data;
+  const seen = f.request({ action: 'list', ...unassignedPetugas }).data[0];
+  assert.equal(seen.restricted, undefined);
+  assert.equal(seen.dokter, 'dr. Rahasia');
+  assert.equal(seen.komplain, 'Isi rahasia');
+  assert.equal(f.request({ action: 'detail', ...unassignedPetugas, id: item.id }).status, 'success');
+});
+test('a petugas can self-assign an unassigned case but not take over an already-assigned one', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner@example.test');
+  const firstResponder = f.addUser('first@example.test', 'petugas');
+  const latecomer = f.addUser('late@example.test', 'petugas');
+  const item = f.createReport(owner).data;
+  assert.equal(f.request({ action: 'assign', ...latecomer, id: item.id, version: item.version, picId: owner.user.id }).code, 403);
+  let assigned = f.request({ action: 'assign', ...firstResponder, id: item.id, version: item.version, picId: firstResponder.user.id }).data;
+  assert.equal(assigned.picId, firstResponder.user.id);
+  assert.equal(f.request({ action: 'assign', ...latecomer, id: assigned.id, version: assigned.version, picId: latecomer.user.id }).code, 403);
+  assigned = f.request({ action: 'followUp', ...firstResponder, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Ditangani' }).data;
+  assert.equal(assigned.statusPenanganan, 'Diproses');
+});
+test('PIC can set the next-handling plan while following up on a case', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner@example.test');
+  const pic = f.addUser('pic@example.test', 'petugas');
+  let item = f.createReport(owner).data;
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Mulai', penangananSelanjutnya: 'Audit SLA bulanan' }).data;
+  assert.equal(item.penangananSelanjutnya, 'Audit SLA bulanan');
+});
 test('existing nineteen-column sheet gains hospital header without shifting report data', () => {
   const f = createFixture();
   const created = f.createReport(f.adminSession).data;
