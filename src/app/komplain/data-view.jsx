@@ -11,6 +11,7 @@ import { reportsToCsv, downloadCsv } from './export.mjs';
 import WorkflowBadge from './workflow-badge';
 import SimpleStatusBadge from './simple-status-badge';
 import AlertBadge from './alert-badge';
+import DatePicker from './date-picker';
 import RoleBadge from './role-badge';
 import { WORKFLOW_STATUSES, canEditReport, canFollowUp, canReopen, handlingStatus, isOverdue, workflowCardStyle } from './workflow.mjs';
 import { apiRequest } from './api-client.mjs';
@@ -84,12 +85,12 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   </div>;
   const periodPicker = periodMode === 'week' ? <div className="flex flex-wrap items-center gap-2">
     <button aria-label="Minggu sebelumnya" onClick={() => selectPeriod(shiftDate(selectedDate, -7))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
-    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Pilih tanggal dalam minggu rekap</span><input type="date" value={selectedDate} onChange={(event) => selectPeriod(event.target.value)} className={input} /></label>
+    <div className="min-w-0 flex-1 sm:flex-none sm:w-56"><DatePicker id="period-week" ariaLabel="Pilih tanggal dalam minggu rekap" value={selectedDate} onChange={selectPeriod} className={input} /></div>
     <button aria-label="Minggu berikutnya" onClick={() => selectPeriod(shiftDate(selectedDate, 7))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
     <button onClick={() => selectPeriod(today())} className={`${control} bg-slate-800 text-slate-200`}>Minggu ini</button>
   </div> : <div className="flex flex-wrap items-center gap-2">
     <button aria-label="Bulan sebelumnya" onClick={() => selectPeriod(shiftMonth(selectedDate, -1))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
-    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Pilih bulan rekap</span><input type="month" value={String(selectedDate).slice(0, 7)} onChange={(event) => selectPeriod(`${event.target.value}-01`)} className={input} /></label>
+    <div className="min-w-0 flex-1 sm:flex-none sm:w-56"><DatePicker id="period-month" ariaLabel="Pilih bulan rekap" value={selectedDate} onChange={selectPeriod} className={input} /></div>
     <button aria-label="Bulan berikutnya" onClick={() => selectPeriod(shiftMonth(selectedDate, 1))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
     <button onClick={() => selectPeriod(today())} className={`${control} bg-slate-800 text-slate-200`}>Bulan ini</button>
   </div>;
