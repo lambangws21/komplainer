@@ -14,6 +14,8 @@ import AlertBadge from './alert-badge';
 import DatePicker from './date-picker';
 import DateRangePicker from './date-range-picker';
 import RoleBadge from './role-badge';
+import ImplantBadge from './implant-badge';
+import { IMPLANTS, detectImplants } from './implant.mjs';
 import { WORKFLOW_STATUSES, canEditReport, canFollowUp, canReopen, handlingStatus, isOverdue, workflowCardStyle } from './workflow.mjs';
 import { apiRequest } from './api-client.mjs';
 
@@ -39,6 +41,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const [level, setLevel] = useState('Semua');
   const [workflowFilter, setWorkflowFilter] = useState('Semua');
   const [onlyMine, setOnlyMine] = useState(false);
+  const [implantFilter, setImplantFilter] = useState('Semua');
   const [period, setPeriod] = useState('all');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
@@ -67,14 +70,14 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     const source = period === 'period' ? summary.current : list;
     const query = search.trim().toLocaleLowerCase('id-ID');
     const hasRange = !!(rangeStart && rangeEnd);
-    return source.filter((item) => (!onlyMine || item.picId === user.id) && (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || String(item.status || '').split(' - ')[0] === level) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
+    return source.filter((item) => (!onlyMine || item.picId === user.id) && (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || String(item.status || '').split(' - ')[0] === level) && (implantFilter === 'Semua' || detectImplants(item).some((implant) => implant.key === implantFilter)) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
       .sort((a, b) => {
         const first = dateKey(a.tanggal), second = dateKey(b.tanggal);
         if (!first) return second ? 1 : 0;
         if (!second) return -1;
         return sort === 'newest' ? second.localeCompare(first) : first.localeCompare(second);
       });
-  }, [list, summary, search, level, workflowFilter, onlyMine, user.id, period, rangeStart, rangeEnd, sort]);
+  }, [list, summary, search, level, workflowFilter, onlyMine, implantFilter, user.id, period, rangeStart, rangeEnd, sort]);
   const myTaskCount = useMemo(() => list.filter((item) => item.picId === user.id).length, [list, user.id]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -85,7 +88,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const ready = loaded;
   const shown = (value) => ready ? value : '—';
   const periodLabel = periodMode === 'week' ? 'minggu' : 'bulan';
-  const reset = () => { setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setOnlyMine(false); setPeriod('all'); setRangeStart(''); setRangeEnd(''); setPage(1); };
+  const reset = () => { setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setOnlyMine(false); setImplantFilter('Semua'); setPeriod('all'); setRangeStart(''); setRangeEnd(''); setPage(1); };
   const selectPeriod = (date) => { const start = periodMode === 'week' ? weekStart(date) : date; if (start) { setSelectedDate(start); setPage(1); } };
   const viewPeriodReports = () => { setPeriod('period'); setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setPage(1); setView('table'); tableViewButton.current?.focus(); };
   function exportFiltered() {
@@ -148,20 +151,21 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <button type="button" aria-pressed={onlyMine} onClick={() => { setOnlyMine((value) => !value); setPage(1); }} className={`${control} ${onlyMine ? 'bg-violet-600' : 'bg-slate-800 text-slate-300'}`}><UserRound aria-hidden="true" className="h-4 w-4" />Tugas saya{myTaskCount > 0 && ` (${myTaskCount})`}</button>
         </div>
 
-        <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-3">
+        <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Status penanganan</span><select className={input} value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value); setPage(1); }}><option value="Semua">Semua status</option>{WORKFLOW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
+          <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Implant</span><select className={input} value={implantFilter} onChange={(event) => { setImplantFilter(event.target.value); setPage(1); }}><option value="Semua">Semua implant</option>{IMPLANTS.map((implant) => <option key={implant.key} value={implant.key}>{implant.label}</option>)}</select></label>
           <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Periode rekap</span><select className={input} value={period} onChange={(event) => { setPeriod(event.target.value); setPage(1); }}><option value="all">Semua tanggal</option><option value="period">{periodMode === 'week' ? 'Minggu terpilih' : 'Bulan terpilih'}</option></select></label>
           <div className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Rentang tanggal</span><DateRangePicker start={rangeStart} end={rangeEnd} today={today()} onApply={(nextStart, nextEnd) => { setRangeStart(nextStart); setRangeEnd(nextEnd); setPage(1); }} onClear={() => { setRangeStart(''); setRangeEnd(''); setPage(1); }} className={`${input} border-slate-700`} /></div>
         </div>
         {period === 'period' && <div className="space-y-3 rounded-xl border border-blue-900/60 bg-blue-950/20 p-3"><p className="text-sm text-blue-200">{formatDate(summary.start)} – {formatDate(summary.end)}</p>{periodPicker}</div>}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><div className="flex flex-wrap items-center gap-2">{(search || level !== 'Semua' || workflowFilter !== 'Semua' || onlyMine || period !== 'all' || (rangeStart && rangeEnd)) && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Export Excel (CSV)</button></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><div className="flex flex-wrap items-center gap-2">{(search || level !== 'Semua' || workflowFilter !== 'Semua' || onlyMine || implantFilter !== 'Semua' || period !== 'all' || (rangeStart && rangeEnd)) && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Export Excel (CSV)</button></div></div>
       </div>
       {rows.length > 0 && <>
         <div tabIndex={0} role="region" aria-label="Tabel laporan komplain, geser untuk melihat semua kolom" className="hidden overflow-x-auto border-y border-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 md:block"><table className="w-full min-w-[1180px] table-fixed text-left text-sm"><caption className="sr-only">Laporan komplain diurutkan berdasarkan tanggal. Gunakan tombol detail untuk membaca masalah dan solusi lengkap.</caption><thead className="bg-slate-950/70 text-xs uppercase tracking-wider text-slate-400"><tr>{[['Dokter', 'w-44'], ['Rumah Sakit', 'w-32'], ['Masalah', ''], ['PIC', 'w-36'], ['Tanggal / Tenggat', 'w-28'], ['Tingkat', 'w-28'], ['Status', 'w-36'], ['Aksi', 'w-36']].map(([label, width]) => <th key={label} scope="col" className={`px-4 py-3 font-medium ${width}`}>{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{rows.map((item, index) => item.restricted ? <tr key={item.id ?? index} className="bg-slate-950/40"><td colSpan={4} className="px-4 py-3.5 align-top"><p className="flex items-center gap-1.5 text-sm text-slate-500"><Lock aria-hidden="true" className="h-4 w-4 shrink-0" />Dilaporkan pengguna lain, isi laporan tidak dapat diakses</p><p className="mt-1 break-words text-xs text-slate-500">RS: {item.rumahSakit || 'Belum diisi'} · Team: {item.team || 'Belum diisi'}</p></td><td className="px-4 py-3.5 align-top text-slate-400">{formatDate(item.tanggal)}</td><td className="px-4 py-3.5 align-top"><Badge status={item.status} /></td><td className="px-4 py-3.5 align-top"><WorkflowBadge status={handlingStatus(item)} /></td><td className="px-4 py-3.5 align-top">{actions(item)}</td></tr> : <tr key={item.id ?? index} className={`transition hover:bg-slate-800/40 ${index % 2 === 1 ? 'bg-slate-900/40' : ''}`}>
           <td className="px-4 py-3.5 align-middle"><div className="flex min-w-0 items-center gap-2.5"><Avatar name={item.dokter} /><div className="min-w-0"><p className="truncate font-semibold text-white">{item.dokter || '—'}</p><p className="truncate text-xs text-slate-400">{item.team || 'Team belum diisi'}</p></div></div></td>
           <td className="px-4 py-3.5 align-middle truncate text-slate-300">{item.rumahSakit || '—'}</td>
-          <td className="px-4 py-3.5 align-middle"><p className="truncate text-xs font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</p><p className="mt-0.5 line-clamp-2 break-words leading-snug text-slate-300">{item.komplain || '—'}</p><button onClick={() => openDetail(item)} className="mt-1 inline-flex items-center text-xs font-semibold text-blue-300 hover:underline">Lihat detail</button></td>
+          <td className="px-4 py-3.5 align-middle"><p className="truncate text-xs font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</p><div className="mt-1"><ImplantBadge item={item} compact /></div><p className="mt-1 line-clamp-2 break-words leading-snug text-slate-300">{item.komplain || '—'}</p><button onClick={() => openDetail(item)} className="mt-1 inline-flex items-center text-xs font-semibold text-blue-300 hover:underline">Lihat detail</button></td>
           <td className="px-4 py-3.5 align-middle">{item.picId ? <div className="flex min-w-0 items-center gap-1.5"><RoleBadge role={item.picRole} pic /><span className="truncate text-xs text-slate-300">{item.picNama}</span></div> : <span className="text-xs text-slate-500">Belum ditugaskan</span>}</td>
           <td className="px-4 py-3.5 align-middle"><p className="text-xs text-slate-300">{formatDate(item.tanggal)}</p>{item.tenggat && <p className={`mt-0.5 text-xs ${isOverdue(item, today()) ? 'font-semibold text-red-300' : 'text-slate-500'}`}>{isOverdue(item, today()) ? 'Terlambat' : formatDate(item.tenggat)}</p>}</td>
           <td className="px-4 py-3.5 align-middle"><Badge status={item.status} /></td>
@@ -174,6 +178,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <p className="mt-2 truncate text-xs text-slate-400">RS: {item.rumahSakit || 'Belum diisi'} · PIC: {item.picNama || 'Belum ditugaskan'}</p>
           {item.tenggat && <p className={`mt-1 text-xs ${isOverdue(item, today()) ? 'font-semibold text-red-300' : 'text-slate-400'}`}>Tenggat: {formatDate(item.tenggat)}{isOverdue(item, today()) ? ' · Terlambat' : ''}</p>}
           <p className="mt-2 truncate text-sm text-slate-300">{item.tindakan || '—'}{(item.jalanKeluar || item.komplain) ? ` | ${item.jalanKeluar || item.komplain}` : ''}</p>
+          <div className="mt-1.5"><ImplantBadge item={item} /></div>
           <div className="mt-3 border-t border-slate-800 pt-3">{actions(item, true)}</div>
         </article>)}</div>
       </>}
@@ -184,6 +189,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
       <div className="flex flex-wrap gap-6">
         <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Prioritas</p><div className="flex flex-wrap gap-2"><Badge status={detail.status} /><AlertBadge item={detail} /></div></div>
         <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Progres</p><div className="flex flex-wrap gap-2"><WorkflowBadge status={handlingStatus(detail)} /><SimpleStatusBadge item={detail} /></div></div>
+        {detectImplants(detail).length > 0 && <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Implant</p><ImplantBadge item={detail} /></div>}
       </div>
       <dl className="grid grid-cols-2 gap-3 rounded-xl border border-slate-800 bg-slate-800/30 p-4">{[['Tanggal', formatDate(detail.tanggal), null], ['Pelapor', detail.pelaporNama || 'Data lama (admin)', detail.pelaporRole], ['Dokter', detail.dokter, null], ['Team', detail.team, null], ['Rumah Sakit', detail.rumahSakit || 'Belum diisi', null], ['PIC', detail.picNama, detail.picId ? detail.picRole : null], ['Tindakan', detail.tindakan, null], ['Tenggat', detail.tenggat ? formatDate(detail.tenggat) : 'Belum ditentukan', null]].map(([label, value, role]) => <div key={label} className="min-w-0"><dt className="text-xs text-slate-400">{label}</dt><dd className="mt-1 flex flex-wrap items-center gap-1.5 break-words text-sm font-medium">{value ? <>{value}{role && <RoleBadge role={role} pic={label === 'PIC'} />}</> : label === 'PIC' ? <span className="flex items-center gap-1.5 text-slate-400"><UserRound aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Belum ditugaskan</span> : '—'}</dd></div>)}</dl>
       {detail.selesaiPada && <p className="text-xs text-slate-400">Selesai pada {new Date(detail.selesaiPada).toLocaleString('id-ID')}</p>}

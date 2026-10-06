@@ -15,6 +15,7 @@ import { LoginPanel, PasswordPanel, ProfilePanel, ApprovalPanel } from './auth-p
 import WorkflowBadge from './workflow-badge';
 import SimpleStatusBadge from './simple-status-badge';
 import AlertBadge from './alert-badge';
+import ImplantBadge from './implant-badge';
 import { apiRequest, postJson } from './api-client.mjs';
 import { ROLE_LABELS, handlingStatus, isOverdue } from './workflow.mjs';
 
@@ -232,7 +233,7 @@ export default function KomplainPage() {
       <div><label htmlFor="workflow-note" className="mb-2 block text-sm">{modal === 'reopen' ? 'Alasan membuka kembali *' : 'Catatan penugasan (opsional)'}</label><textarea id="workflow-note" placeholder="Tuliskan perkembangan atau alasan perubahan…" rows={3} maxLength={2000} required={!['assign', 'selfAssign'].includes(modal)} value={workflow.catatan} onChange={(event) => setWorkflow({ ...workflow, catatan: event.target.value })} className={inputClass} /></div><div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button disabled={busy} className={`${buttonClass} flex-1 bg-blue-600`}>{busy ? 'Menyimpan…' : 'Simpan'}</button></div>
     </form>}
     {modal === 'picAction' && (() => { const lastNote = picHistory.find((entry) => entry.catatan); return <div className="mt-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><Badge status={workflowItem?.status} /><WorkflowBadge status={handlingStatus(workflowItem || {})} /><AlertBadge item={workflowItem || {}} /></div><p className="break-words text-sm text-slate-300">{workflowItem?.dokter} · {workflowItem?.tindakan}</p></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><Badge status={workflowItem?.status} /><WorkflowBadge status={handlingStatus(workflowItem || {})} /><AlertBadge item={workflowItem || {}} /><ImplantBadge item={workflowItem || {}} /></div><p className="break-words text-sm text-slate-300">{workflowItem?.dokter} · {workflowItem?.tindakan}</p></div>
       {picDetailLoading && <LoadingState compact title="Memuat detail laporan…" description="Mengambil informasi lengkap laporan ini." />}
       {picDetailError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">{picDetailError}</p>}
       <div className="rounded-xl border border-slate-800 bg-slate-800/30">
