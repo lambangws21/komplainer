@@ -99,10 +99,16 @@ export default function KomplainPage() {
   const [customTindakan, setCustomTindakan] = useState(false);
   const [formTyping, setFormTyping] = useState(false);
   const formTypingTimeout = useRef(null);
-  const handleFormActivity = useCallback(() => {
-    setFormTyping(true);
+  const isTypingTarget = (element) => ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName);
+  const handleFormFocus = useCallback((event) => {
+    if (!isTypingTarget(event.target)) return;
     clearTimeout(formTypingTimeout.current);
-    formTypingTimeout.current = setTimeout(() => setFormTyping(false), 900);
+    setFormTyping(true);
+  }, []);
+  const handleFormBlur = useCallback((event) => {
+    if (!isTypingTarget(event.target)) return;
+    clearTimeout(formTypingTimeout.current);
+    formTypingTimeout.current = setTimeout(() => setFormTyping(false), 150);
   }, []);
   const [picHistory, setPicHistory] = useState([]);
   const [picDetailLoading, setPicDetailLoading] = useState(false);
@@ -292,7 +298,7 @@ export default function KomplainPage() {
     {busy && <div className="mt-5"><LoadingState title={modal === 'delete' ? 'Mengarsipkan laporan…' : 'Menyimpan perubahan…'} description="Tunggu hingga konfirmasi muncul. Jangan tutup halaman." /></div>}
     <div aria-busy={busy} hidden={busy} className={dialogBody} data-dialog-scroll>
     {actionError && <p role="alert" className="mt-4 break-words rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">{actionError}</p>}
-    {modal === 'form' && <form onSubmit={review} onChange={handleFormActivity} className="mt-4 space-y-4"><p className="text-xs leading-5 text-slate-400">Kolom bertanda * wajib diisi. Anda dapat meninjau laporan sebelum mengirim.</p>
+    {modal === 'form' && <form onSubmit={review} onFocus={handleFormFocus} onBlur={handleFormBlur} className="mt-4 space-y-4"><p className="text-xs leading-5 text-slate-400">Kolom bertanda * wajib diisi. Anda dapat meninjau laporan sebelum mengirim.</p>
       <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-3"><button type="button" onClick={() => setShowExample((value) => !value)} className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-blue-200"><span className="flex items-center gap-2"><Lightbulb aria-hidden="true" className="h-4 w-4 shrink-0" />Lihat contoh pengisian</span><span className="text-xs text-blue-300">{showExample ? 'Sembunyikan' : 'Tampilkan'}</span></button>
         {showExample && <dl className="mt-3 space-y-2 border-t border-blue-900/60 pt-3">{fields.map(([name, label]) => <div key={name}><dt className="text-xs text-blue-300">{label}</dt><dd className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-5 text-slate-300">{name === 'tanggal' ? formatDate(fieldExamples[name]) : fieldExamples[name]}</dd></div>)}</dl>}
       </div>
