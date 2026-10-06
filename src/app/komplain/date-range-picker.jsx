@@ -72,7 +72,7 @@ export default function DateRangePicker({ start, end, onApply, onClear, today, c
       </button>
     </Popover.Trigger>
     <Popover.Portal>
-      <Popover.Content align="start" sideOffset={8} className="komplain-theme z-[70] w-[min(22rem,90vw)] rounded-2xl border border-slate-700 bg-slate-900 p-3 shadow-2xl">
+      <Popover.Content data-komplain-popover align="start" sideOffset={8} className="komplain-theme z-[70] w-[min(22rem,90vw)] rounded-2xl border border-slate-700 bg-slate-900 p-3 shadow-2xl">
         <DayPicker
           mode="range"
           selected={selectedRange}
