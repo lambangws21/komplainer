@@ -74,6 +74,8 @@ export default function KomplainPage() {
   const userRef = useRef(null);
   const [assignedNotice, setAssignedNotice] = useState([]);
   const [incomingNotice, setIncomingNotice] = useState([]);
+  const [criticalNotice, setCriticalNotice] = useState([]);
+  const criticalSeenRef = useRef(new Set());
   const [readIds, setReadIds] = useState(() => new Set());
   const [tab, setTab] = useState('form');
   const [modal, setModal] = useState(null);
@@ -101,7 +103,7 @@ export default function KomplainPage() {
     previousListRef.current = null;
     setUser(null); setList([]); setAssignees([]); setLoaded(false); setLoading(false);
     setModal(null); setEditItem(null); setWorkflowItem(null); setForm(newForm());
-    setAssignedNotice([]); setIncomingNotice([]); setReadIds(new Set());
+    setAssignedNotice([]); setIncomingNotice([]); setCriticalNotice([]); criticalSeenRef.current = new Set(); setReadIds(new Set());
     setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
   }, []);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -122,7 +124,13 @@ export default function KomplainPage() {
       return next;
     });
   }, []);
-  const unreadItems = useMemo(() => (user && ['admin', 'petugas'].includes(user.role) ? list.filter((item) => item.id != null && item.pelaporId !== user.id && !readIds.has(item.id)) : []), [list, user, readIds]);
+  const unreadItems = useMemo(() => {
+    if (!user) return [];
+    const items = ['admin', 'petugas'].includes(user.role)
+      ? list.filter((item) => item.id != null && item.pelaporId !== user.id && !readIds.has(item.id))
+      : list.filter((item) => item.id != null && item.pelaporId === user.id && item.picId && !readIds.has(item.id));
+    return [...items].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  }, [list, user, readIds]);
   useEffect(() => {
     let alive = true;
     apiRequest('/api/auth/session').then((result) => { if (alive) setUser(result.user); })
@@ -150,6 +158,18 @@ export default function KomplainPage() {
           }
           if (newlyAssigned.length) setAssignedNotice((queue) => [...queue, ...newlyAssigned]);
           if (newlyArrived.length) setIncomingNotice((queue) => [...queue, ...newlyArrived]);
+        }
+        if (activeUser && ['admin', 'petugas'].includes(activeUser.role)) {
+          const criticalNow = result.data.filter((item) => /^C[12] - /.test(String(item.status)) && !item.picId && handlingStatus(item) !== 'Selesai');
+          const criticalIds = new Set(criticalNow.map((item) => item.id));
+          for (const id of Array.from(criticalSeenRef.current)) if (!criticalIds.has(id)) criticalSeenRef.current.delete(id);
+          const newCritical = criticalNow.filter((item) => item.id != null && !criticalSeenRef.current.has(item.id));
+          newCritical.forEach((item) => criticalSeenRef.current.add(item.id));
+          setCriticalNotice((queue) => {
+            const kept = queue.filter((item) => criticalIds.has(item.id));
+            const keptIds = new Set(kept.map((item) => item.id));
+            return [...kept, ...newCritical.filter((item) => !keptIds.has(item.id))];
+          });
         }
         previousListRef.current = result.data;
         setList(result.data); setAssignees(result.assignees || []); setLoaded(true);
@@ -282,13 +302,19 @@ export default function KomplainPage() {
     {modal === 'success' && <div className="mt-5 flex flex-col items-center gap-4 py-2 text-center"><span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-emerald-500/15"><CheckCircle2 aria-hidden="true" className="h-10 w-10 text-emerald-400" /></span><p className="break-words text-sm leading-6 text-slate-300">{successText}</p><Dialog.Close className={`${buttonClass} w-full bg-blue-600`}>Tutup</Dialog.Close></div>}
     </div>
   </Dialog.Content></Dialog.Portal></Dialog.Root>
-  <Dialog.Root open={assignedNotice.length > 0 && modal === null} onOpenChange={(open) => { if (!open) setAssignedNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
+  <Dialog.Root open={criticalNotice.length > 0 && modal === null} onOpenChange={(open) => { if (!open) setCriticalNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
+    <div className={dialogHeader}><Dialog.Title className="flex items-center gap-2 pr-12 text-xl font-bold text-red-300"><AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0" />Kasus kritis belum ada PIC</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{criticalNotice.length > 1 ? `${criticalNotice.length} laporan C1/C2` : '1 laporan C1/C2'} belum ditugaskan penanggung jawab. Segera tentukan PIC.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
+    <div className={`${dialogBody} space-y-3 pt-4`}>{criticalNotice.map((item) => <div key={item.id} className="rounded-xl border border-red-900/50 bg-red-950/20 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="break-words text-sm font-semibold">{item.dokter} · {item.tindakan}</p><Badge status={item.status} /></div><p className="mt-1 break-words text-sm text-slate-300">Dilaporkan oleh <strong>{item.pelaporNama || 'Pengguna'}</strong> · {formatDate(item.tanggal)}</p><button onClick={() => { setCriticalNotice((queue) => queue.filter((entry) => entry.id !== item.id)); openWorkflow('assign', item); }} className={`${buttonClass} mt-2 w-full bg-red-700 hover:bg-red-600`}><UserRound aria-hidden="true" className="h-4 w-4" />Tentukan PIC sekarang</button></div>)}
+      <Dialog.Close className={`${buttonClass} w-full bg-slate-800`}>Tutup untuk sekarang</Dialog.Close>
+    </div>
+  </Dialog.Content></Dialog.Portal></Dialog.Root>
+  <Dialog.Root open={assignedNotice.length > 0 && criticalNotice.length === 0 && modal === null} onOpenChange={(open) => { if (!open) setAssignedNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
     <div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Laporan Anda sudah ditangani</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">Penanggung jawab (PIC) baru ditentukan untuk {assignedNotice.length > 1 ? `${assignedNotice.length} laporan Anda` : 'laporan Anda'}.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
     <div className={`${dialogBody} space-y-3 pt-4`}>{assignedNotice.map((item) => <div key={item.id} className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-3"><p className="flex items-center gap-1.5 text-sm font-semibold"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-violet-300" />{item.dokter} · {item.tindakan}</p><p className="mt-1 break-words text-sm text-slate-300">Ditangani oleh <strong>{item.picNama}</strong>{item.tenggat ? ` · Tenggat ${formatDate(item.tenggat)}` : ''}</p></div>)}
       <div className={formFooter}><Dialog.Close className={`${buttonClass} flex-1 bg-slate-800`}>Tutup</Dialog.Close><button onClick={() => { setAssignedNotice([]); setTab('table'); }} className={`${buttonClass} flex-1 bg-blue-600`}>Lihat laporan saya</button></div>
     </div>
   </Dialog.Content></Dialog.Portal></Dialog.Root>
-  <Dialog.Root open={incomingNotice.length > 0 && assignedNotice.length === 0 && modal === null} onOpenChange={(open) => { if (!open) setIncomingNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
+  <Dialog.Root open={incomingNotice.length > 0 && assignedNotice.length === 0 && criticalNotice.length === 0 && modal === null} onOpenChange={(open) => { if (!open) setIncomingNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
     <div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Laporan baru masuk</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{incomingNotice.length > 1 ? `${incomingNotice.length} laporan baru` : '1 laporan baru'} sejak terakhir Anda membuka halaman ini.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
     <div className={`${dialogBody} space-y-3 pt-4`}>{incomingNotice.map((item) => <div key={item.id} className="rounded-xl border border-blue-900/50 bg-blue-950/20 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-1.5 text-sm font-semibold"><Inbox aria-hidden="true" className="h-4 w-4 shrink-0 text-blue-300" />{item.dokter} · {item.tindakan}</p><Badge status={item.status} /></div><p className="mt-1 break-words text-sm text-slate-300">Dilaporkan oleh <strong>{item.pelaporNama || 'Pengguna'}</strong> · {formatDate(item.tanggal)}</p></div>)}
       <div className={formFooter}><Dialog.Close className={`${buttonClass} flex-1 bg-slate-800`}>Tutup</Dialog.Close><button onClick={() => { setIncomingNotice([]); setTab('table'); }} className={`${buttonClass} flex-1 bg-blue-600`}>Lihat semua laporan</button></div>

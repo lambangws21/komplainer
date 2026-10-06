@@ -15,7 +15,7 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
       <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Monitoring lapangan</p><h1 className="text-xl font-bold sm:text-2xl">Laporan Komplain</h1></div>
       <div className="flex items-center gap-2">
         <InfoPanel />
-        {showNav && ['admin', 'petugas'].includes(user.role) && <DropdownMenu.Root>
+        {showNav && <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild><button aria-label={`Notifikasi laporan baru${unreadCount ? `, ${unreadCount} belum dibuka` : ''}`} className={`${buttonClass} relative border border-slate-700 bg-slate-800 px-3`}>
             <Bell aria-hidden="true" className="h-5 w-5" />
             {unreadCount > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}

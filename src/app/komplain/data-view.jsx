@@ -73,7 +73,8 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     const hasRange = !!(rangeStart && rangeEnd);
     return source.filter((item) => (!onlyMine || item.picId === user.id) && (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || String(item.status || '').split(' - ')[0] === level) && (implantFilter === 'Semua' || detectImplants(item).some((implant) => implant.key === implantFilter)) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
       .sort((a, b) => {
-        const first = dateKey(a.tanggal), second = dateKey(b.tanggal);
+        const first = a.createdAt || (dateKey(a.tanggal) ? `${dateKey(a.tanggal)}T00:00:00` : '');
+        const second = b.createdAt || (dateKey(b.tanggal) ? `${dateKey(b.tanggal)}T00:00:00` : '');
         if (!first) return second ? 1 : 0;
         if (!second) return -1;
         return sort === 'newest' ? second.localeCompare(first) : first.localeCompare(second);
@@ -151,7 +152,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
       <div className="space-y-4 p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <label className="relative"><span className="sr-only">Cari laporan</span><Search aria-hidden="true" className="absolute left-3 top-3 h-5 w-5 text-slate-400" /><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Cari dokter, rumah sakit, team, masalah, atau solusi…" className={`${input} pl-10`} /></label>
-          <label className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="sr-only">Urutkan laporan</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={input}><option value="newest">Tanggal terbaru</option><option value="oldest">Tanggal terlama</option></select></label>
+          <label className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="sr-only">Urutkan laporan</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={input}><option value="newest">Baru masuk dahulu</option><option value="oldest">Lama dahulu</option></select></label>
         </div>
 
         <div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}
