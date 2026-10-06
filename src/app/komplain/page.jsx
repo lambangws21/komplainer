@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { PlusCircle, RefreshCw, LogOut, X, CheckCircle2, Lightbulb } from 'lucide-react';
+import { PlusCircle, X, CheckCircle2, Lightbulb } from 'lucide-react';
 import DataView from './data-view';
 import './theme.css';
 import { useDialogViewport } from './use-dialog-viewport';
@@ -10,10 +10,10 @@ import { mobileDialog, formFooter, dialogHeader, dialogBody } from './ui-styles.
 import LoadingState from './loading-state';
 import InstallApp from './install-app';
 import AccountsPanel from './accounts-panel';
+import Navbar from './navbar';
 import { LoginPanel, PasswordPanel, ProfilePanel, ApprovalPanel } from './auth-panel';
 import WorkflowBadge from './workflow-badge';
 import SimpleStatusBadge from './simple-status-badge';
-import RoleBadge from './role-badge';
 import { apiRequest, postJson } from './api-client.mjs';
 import { ROLE_LABELS, handlingStatus, isOverdue } from './workflow.mjs';
 
@@ -144,7 +144,7 @@ export default function KomplainPage() {
   }
   const titles = { form: editItem ? 'Edit laporan komplain' : 'Buat laporan komplain', review: 'Tinjau laporan', delete: 'Arsipkan laporan?', assign: 'Tentukan penanggung jawab', followUp: 'Catat tindak lanjut', reopen: 'Buka kembali laporan', success: 'Berhasil' };
   const descriptions = { form: 'Isi kolom bertanda *. Solusi awal boleh dikosongkan.', review: 'Pastikan informasi sudah benar sebelum disimpan.', delete: 'Laporan disembunyikan dari daftar aktif. Data dan riwayat tetap tersimpan.', assign: 'Pilih petugas atau pelapor aktif untuk menangani kasus ini, lalu tentukan tenggat.', followUp: 'Catat perkembangan penanganan. Solusi wajib diisi ketika selesai.', reopen: 'Jelaskan mengapa masalah masih membutuhkan penanganan.', success: successText };
-  const header = <header className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="mb-1 text-sm text-blue-300">Monitoring lapangan</p><h1 className="text-2xl font-bold sm:text-3xl">Laporan Komplain</h1><p className="mt-2 text-sm text-slate-400">Catat kendala, tentukan penanggung jawab, dan pantau penyelesaiannya.</p></div>{user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword && <button onClick={fetchData} disabled={loading || busy} aria-label="Muat ulang laporan" className={`${buttonClass} shrink-0 border border-slate-700 bg-slate-800 px-3`}><RefreshCw aria-hidden="true" className={`h-5 w-5 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /></button>}</div>{user && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4"><p className="break-words text-sm text-slate-300">{user.nama} <span className="text-slate-500">·</span> <RoleBadge role={user.role} /> <span className="text-slate-500">·</span> {user.unit}</p><button disabled={loggingOut || busy} onClick={logout} className={`${buttonClass} bg-slate-800 text-slate-300`}><LogOut aria-hidden="true" className="h-4 w-4" />{loggingOut ? 'Keluar…' : 'Keluar'}</button></div>}{user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword && <nav aria-label="Halaman komplain" className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{[['form', 'Input laporan'], ['table', user.role === 'admin' ? 'Data Master' : 'Tugas & laporan saya'], ...(user.role === 'admin' ? [['users', 'Pengguna']] : []), ['account', 'Akun saya']].map(([value, label]) => <button key={value} ref={value === 'form' ? newButton : value === 'table' ? masterButton : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={tab === value ? 'page' : undefined} className={`${buttonClass} ${tab === value ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{label}</button>)}</nav>}</header>;
+  const header = <Navbar user={user} tab={tab} setTab={setTab} loading={loading} busy={busy} loggingOut={loggingOut} onRefresh={fetchData} onLogout={logout} newButtonRef={newButton} masterButtonRef={masterButton} />;
 
   return <main lang="id" data-role={user?.role || 'pelapor'} className="komplain-theme min-h-screen bg-slate-950 px-3 py-4 text-slate-100 sm:p-8"><div className="mx-auto max-w-7xl space-y-6">{header}<InstallApp role={user?.role} />
     {authChecking ? <LoadingState title="Menyiapkan Komplainer…" description="Memeriksa sesi dan hak akses Anda." /> : !user ? <LoginPanel onLogin={(next) => { setUser(next); setAuthError(''); setAuthNotice(''); }} initialError={authError} notice={authNotice} /> : ['pending', 'rejected'].includes(user.approval) ? <ApprovalPanel user={user} onApproved={setUser} onExpired={endSession} /> : user.mustChangePassword ? <PasswordPanel user={user} onChanged={endSession} onExpired={endSession} /> : tab === 'account' ? <div className="space-y-6"><ProfilePanel user={user} onChanged={endSession} onExpired={endSession} /><PasswordPanel user={user} onChanged={endSession} onExpired={endSession} /></div> : tab === 'users' && user.role === 'admin' ? <AccountsPanel currentUser={user} onExpired={endSession} /> : <>
