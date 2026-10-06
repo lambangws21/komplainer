@@ -78,5 +78,8 @@
   "allowScripts": {
     "@firebase/util@1.15.3": true,
     "protobufjs@7.6.6": true
+  },
+  "overrides": {
+    "jose": "^5.10.0"
   }
 }
