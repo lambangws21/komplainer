@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword, validatePassword } from '@/lib/server/password.mjs';
 import { usesFirebase, firebaseAuth } from '@/lib/server/firebase-auth';
 import { currentFirebaseUser, firebaseDirectory, writeFirebaseMetadata } from '@/lib/server/firebase-accounts';
-import { appClaims, profileFromAccount, assertAccountChange } from '@/lib/server/firebase-profile.mjs';
+import { appClaims, profileFromAccount, assertAccountChange, usernameField, assertUsernameAvailable } from '@/lib/server/firebase-profile.mjs';
 import { firebaseUid, firebaseEmail } from '@/lib/server/firebase-identity.mjs';
+export const maxDuration = 30;
 export async function GET() {
   try { if (usesFirebase()) { const user = await currentFirebaseUser(); if (user.role !== 'admin' || user.mustChangePassword) throw new ApiError('Hanya admin dapat mengelola akun.', 403); return json({ status: 'success', data: await firebaseDirectory() }); } return json(await callScript('users')); } catch (error) { return errorResponse(error); }
 }
@@ -24,7 +25,9 @@ export async function POST(request) {
         const unit = accountText(body.unit, 'Team Pelapor');
         if (!['admin', 'pelapor', 'petugas'].includes(body.role)) throw new ApiError('Peran tidak valid.');
         const id = `USR-${randomUUID()}`;
-        const metadata = { role: body.role, unit, active: true, approval: 'approved', mustChangePassword: true };
+        const username = body.username ? usernameField(body.username) : null;
+        assertUsernameAvailable(await firebaseDirectory(), username, null);
+        const metadata = { role: body.role, unit, active: true, approval: 'approved', mustChangePassword: true, username };
         const claims = appClaims({}, metadata);
         let account;
         try { account = await auth.createUser({ uid: firebaseUid(id), email: firebaseEmail(body.email), password: body.password, displayName: nama, disabled: true }); }
@@ -38,14 +41,14 @@ export async function POST(request) {
       if (!target) throw new ApiError('Akun tidak ditemukan.', 404);
       if (['approveUser', 'rejectUser'].includes(body.action)) {
         if (!['pending', 'rejected'].includes(target.approval)) throw new ApiError('Pendaftaran sudah diproses. Muat ulang daftar.', 409);
-        await writeFirebaseMetadata(target.firebaseUid, { approval: body.action === 'approveUser' ? 'approved' : 'rejected', role: 'pelapor', active: true, approvedBy: user.firebaseUid });
+        await writeFirebaseMetadata(target.firebaseUid, { approval: body.action === 'approveUser' ? 'approved' : 'rejected', role: 'pelapor', unit: target.unit, username: target.username, mustChangePassword: target.mustChangePassword, active: true, approvedBy: user.firebaseUid });
         return json({ status: 'success' });
       }
       if (target.approval !== 'approved') throw new ApiError('Setujui pendaftaran terlebih dahulu sebelum mengubah akun.', 409);
       if (body.action === 'resetPassword') {
         try { validatePassword(body.password); } catch (error) { throw new ApiError(error.message); }
         // Gate the temporary password before changing Firebase credentials.
-        await writeFirebaseMetadata(target.firebaseUid, { role: target.role, unit: target.unit, active: target.active, mustChangePassword: true });
+        await writeFirebaseMetadata(target.firebaseUid, { role: target.role, unit: target.unit, active: target.active, username: target.username, mustChangePassword: true });
         await auth.updateUser(target.firebaseUid, { password: body.password });
         await auth.revokeRefreshTokens(target.firebaseUid);
         return json({ status: 'success' });
@@ -54,7 +57,9 @@ export async function POST(request) {
       const nama = accountText(body.nama, 'Nama');
       const unit = accountText(body.unit, 'Team Pelapor');
       const email = firebaseEmail(body.email);
-      const metadata = { role: body.role, unit, active: body.active, mustChangePassword: target.mustChangePassword };
+      const username = body.username !== undefined ? (body.username ? usernameField(body.username) : null) : target.username;
+      assertUsernameAvailable(accounts, username, target.firebaseUid);
+      const metadata = { role: body.role, unit, active: body.active, mustChangePassword: target.mustChangePassword, username };
       appClaims(await auth.getUser(target.firebaseUid), metadata);
       if (!body.active || body.role !== target.role) await callScript('accountGuard', { id: target.id });
       await auth.updateUser(target.firebaseUid, { email, displayName: nama, disabled: !body.active });

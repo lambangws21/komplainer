@@ -12,15 +12,24 @@ export function profileFromAccount(account) {
   const meta = account.customClaims?.komplainer;
   if (!meta || !['admin', 'pelapor', 'petugas'].includes(meta.role)) return null;
   const approval = meta.approval || 'approved'; // Preserve previously approved accounts.
-  return { id: profileId(account.uid), firebaseUid: account.uid, nama: account.displayName || account.email?.split('@')[0] || 'Pengguna', email: account.email, role: meta.role, unit: meta.unit || 'Belum diisi', approval, active: !account.disabled && meta.active !== false && approval === 'approved', mustChangePassword: meta.mustChangePassword === true };
+  return { id: profileId(account.uid), firebaseUid: account.uid, nama: account.displayName || account.email?.split('@')[0] || 'Pengguna', email: account.email, username: meta.username || null, role: meta.role, unit: meta.unit || 'Belum diisi', approval, active: !account.disabled && meta.active !== false && approval === 'approved', mustChangePassword: meta.mustChangePassword === true };
 }
 export function requireApprovedProfile(user) {
   if (!user || user.approval && user.approval !== 'approved') throw new ApiError(user?.approval === 'rejected' ? 'Pendaftaran ditolak. Hubungi admin.' : 'Akun menunggu persetujuan admin.', 403);
   if (!user.active) throw new ApiError('Akun dinonaktifkan. Hubungi admin.', 403);
   return user;
 }
-export function registrationMetadata(unit) {
-  return { role: 'pelapor', unit, active: true, approval: 'pending', mustChangePassword: false };
+export const REGISTRATION_UNITS = ['TS', 'Logistik'];
+export function registrationMetadata(unit, username) {
+  return { role: 'pelapor', unit, active: true, approval: 'pending', mustChangePassword: false, username: username || null };
+}
+export function usernameField(value) {
+  const username = String(value || '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_.-]{2,31}$/.test(username)) throw new ApiError('Username harus 3-32 karakter: huruf kecil, angka, titik (.), garis bawah (_), atau strip (-), dan diawali huruf atau angka.');
+  return username;
+}
+export function assertUsernameAvailable(accounts, username, exceptFirebaseUid) {
+  if (username && accounts.some((item) => item.username === username && item.firebaseUid !== exceptFirebaseUid)) throw new ApiError('Username sudah digunakan akun lain.', 409);
 }
 export function appClaims(account, metadata) {
   const claims = { ...account.customClaims, komplainer: metadata };
