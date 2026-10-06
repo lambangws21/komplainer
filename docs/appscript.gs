@@ -390,7 +390,7 @@ function handle(body) {
   }
   if (action === 'list') {
     var accounts = allUsers();
-    return { status: 'success', data: reports().map(function (item) { return canRead(item, user) ? publicReport(item, accounts) : summaryReport(item); }), assignees: user.role === 'admin' ? accounts.filter(function (item) { return item.active && (item.role === 'petugas' || item.role === 'pelapor'); }).map(publicUser) : [] };
+    return { status: 'success', data: reports().map(function (item) { return canRead(item, user) ? publicReport(item, accounts) : summaryReport(item); }), assignees: user.role === 'admin' ? accounts.filter(function (item) { return item.active && item.role === 'petugas'; }).map(publicUser) : [] };
   }
   if (action === 'detail') {
     var detail = findReport(body.id, user);
@@ -436,8 +436,8 @@ function handle(body) {
     var selfAssign = user.role === 'petugas' && !item.picId && body.picId === user.id;
     if (!selfAssign) requireAdmin(user);
     if (item.statusPenanganan === 'Selesai') fail('Buka kembali laporan sebelum mengubah penugasan.', 409);
-    var pic = allUsers().filter(function (target) { return target.id === body.picId && (target.role === 'petugas' || target.role === 'pelapor') && target.active; })[0];
-    if (body.picId && !pic) fail('PIC harus merupakan petugas atau pelapor aktif.');
+    var pic = allUsers().filter(function (target) { return target.id === body.picId && target.role === 'petugas' && target.active; })[0];
+    if (body.picId && !pic) fail('PIC harus merupakan petugas (PIC) aktif.');
     item.picId = pic ? pic.id : '';
     item.picNama = pic ? pic.nama : '';
     item.tenggat = validDate(body.tenggat, true);
