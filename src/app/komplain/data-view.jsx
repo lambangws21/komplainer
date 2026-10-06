@@ -23,7 +23,7 @@ import { apiRequest } from './api-client.mjs';
 const control = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-40';
 const iconControl = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-40';
 const input = 'min-w-0 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-base text-white focus:outline-none focus:ring-2 focus:ring-blue-400';
-const pageSize_OPTIONS = [5, 10, 20, 50];
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 function initials(name) {
   const cleaned = String(name || '').replace(/^dr\.?\s*/i, '').trim();
   if (!cleaned) return '?';
