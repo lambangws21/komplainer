@@ -23,7 +23,7 @@ import { apiRequest } from './api-client.mjs';
 const control = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-40';
 const iconControl = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-40';
 const input = 'min-w-0 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-base text-white focus:outline-none focus:ring-2 focus:ring-blue-400';
-const PAGE_SIZE = 10;
+const pageSize_OPTIONS = [5, 10, 20, 50];
 function initials(name) {
   const cleaned = String(name || '').replace(/^dr\.?\s*/i, '').trim();
   if (!cleaned) return '?';
@@ -48,6 +48,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const [rangeEnd, setRangeEnd] = useState('');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [detail, setDetail] = useState(null);
   const dialogStyle = useDialogViewport(detail !== null);
   const [history, setHistory] = useState([]);
@@ -88,9 +89,9 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     petugas: seen.petugas || (!!item.picId && item.picRole === 'petugas'),
     delegated: seen.delegated || (!!item.picId && item.picRole === 'pelapor'),
   }), { admin: false, pelapor: false, petugas: false, delegated: false }), [list]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const rows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const highPriority = summary.current.filter((item) => /^C[12] - /.test(String(item.status))).length;
   const teams = new Set(summary.current.map((item) => String(item.team || '').trim()).filter(Boolean)).size;
   const delta = summary.current.length - summary.previous.length;
@@ -197,7 +198,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
         </article>)}</div>
       </>}
       {!loading && !loadError && ready && rows.length === 0 && <div className="border-t border-slate-800 p-10 text-center"><Search aria-hidden="true" className="mx-auto h-8 w-8 text-slate-600" /><h3 className="mt-3 font-semibold">{list.length ? 'Tidak ada laporan yang cocok' : 'Belum ada laporan'}</h3><p className="mt-2 text-sm text-slate-400">{list.length ? 'Ubah kata kunci, tingkat keparahan, atau periode.' : 'Mulai dengan membuat laporan komplain pertama.'}</p><button onClick={list.length ? reset : onCreate} className={`${control} mt-4 bg-slate-800`}>{list.length ? 'Reset semua filter' : 'Buat laporan'}</button></div>}
-      {filtered.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-5 py-4"><p className="text-xs text-slate-400">Menampilkan {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} dari {filtered.length} laporan</p><div className="flex items-center gap-2"><button disabled={currentPage === 1} aria-label="Halaman sebelumnya" onClick={() => setPage(currentPage - 1)} className={`${control} bg-slate-800 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button><span className="text-sm tabular-nums">{currentPage} / {totalPages}</span><button disabled={currentPage === totalPages} aria-label="Halaman berikutnya" onClick={() => setPage(currentPage + 1)} className={`${control} bg-slate-800 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button></div></div>}
+      {filtered.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-5 py-4"><p className="text-xs text-slate-400">Menampilkan {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} dari {filtered.length} laporan</p><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-400"><span className="hidden sm:inline">Tampilkan</span><select aria-label="Jumlah laporan per halaman" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="min-h-9 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-400">{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / halaman</option>)}</select></label><div className="flex items-center gap-2"><button disabled={currentPage === 1} aria-label="Halaman sebelumnya" onClick={() => setPage(currentPage - 1)} className={`${control} bg-slate-800 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button><span className="text-sm tabular-nums">{currentPage} / {totalPages}</span><button disabled={currentPage === totalPages} aria-label="Halaman berikutnya" onClick={() => setPage(currentPage + 1)} className={`${control} bg-slate-800 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button></div></div></div>}
     </div>}
     <Dialog.Root open={detail !== null} onOpenChange={(open) => { if (!open) { detailVersion.current += 1; setDetail(null); } }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user.role} style={dialogStyle} onCloseAutoFocus={(event) => { event.preventDefault(); if (detailReturnFocus.current?.isConnected) detailReturnFocus.current.focus(); }} className={`${mobileDialog} max-w-2xl`}><div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Detail laporan</Dialog.Title><Dialog.Description className="mt-2 text-sm text-slate-400">Informasi kejadian, masalah, dan solusi yang dicatat.</Dialog.Description><Dialog.Close aria-label="Tutup detail laporan" className={`${control} absolute right-3 top-3 px-3 text-slate-300`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>{detail && <div className={`${dialogBody} pt-5 space-y-5`} data-dialog-scroll>
       <div className="flex flex-wrap gap-6">
