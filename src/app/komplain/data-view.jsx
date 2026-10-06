@@ -102,6 +102,11 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   function exportFiltered() {
     downloadCsv(`laporan-komplain-${today()}.csv`, reportsToCsv(filtered));
   }
+  const alertAction = (item) => () => {
+    if (canFollowUp(item, user)) onOpenPicAction(item);
+    else if (canEditReport(item, user)) onEdit(item);
+    else openDetail(item);
+  };
   const actions = (item, mobile = false) => item.restricted ? <p className="flex items-center gap-1.5 text-xs text-slate-500"><Lock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Tidak dapat diakses</p> : <div className={mobile ? 'grid w-full grid-cols-2 gap-2' : 'flex flex-wrap items-center gap-1'}>
     {canFollowUp(item, user) ? <button disabled={busy} aria-label={`Detail dan tindak lanjut ${item.dokter || ''}`} onClick={() => onOpenPicAction(item)} className={mobile ? `${control} px-3 text-emerald-300 hover:bg-emerald-500/10` : `${iconControl} text-emerald-300 hover:bg-emerald-500/10`}><MessageCircle aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail & Tindak Lanjut</span>}</button> : <button aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={mobile ? `${control} px-3 text-blue-300 hover:bg-blue-500/10` : `${iconControl} text-blue-300 hover:bg-blue-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail</span>}</button>}
     {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Edit laporan ${item.dokter || ''}`} onClick={() => onEdit(item)} className={mobile ? `${control} px-3 text-slate-300 hover:bg-slate-800` : `${iconControl} text-slate-300 hover:bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Edit</span>}</button>}
@@ -177,12 +182,12 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <td className="px-4 py-3.5 align-middle">{item.picId ? <div className="flex min-w-0 items-center gap-1.5"><RoleBadge role={item.picRole} pic /><span className="truncate text-xs text-slate-300">{item.picNama}</span></div> : <span className="text-xs text-slate-500">Belum ditugaskan</span>}</td>
           <td className="px-4 py-3.5 align-middle"><p className="text-xs text-slate-300">{formatDate(item.tanggal)}</p>{item.tenggat && <p className={`mt-0.5 text-xs ${isOverdue(item, today()) ? 'font-semibold text-red-300' : 'text-slate-500'}`}>{isOverdue(item, today()) ? 'Terlambat' : formatDate(item.tenggat)}</p>}</td>
           <td className="px-4 py-3.5 align-middle"><Badge status={item.status} /></td>
-          <td className="px-4 py-3.5 align-middle"><div className="flex flex-wrap items-center gap-1.5"><WorkflowBadge status={handlingStatus(item)} /><AlertBadge item={item} compact /></div></td>
+          <td className="px-4 py-3.5 align-middle"><div className="flex flex-wrap items-center gap-1.5"><WorkflowBadge status={handlingStatus(item)} /><AlertBadge item={item} compact onClick={alertAction(item)} /></div></td>
           <td className="px-3 py-3.5 align-middle">{actions(item)}</td>
         </tr>)}</tbody></table></div>
         <div className="space-y-3 px-3 pb-4 sm:px-4 md:hidden">{rows.map((item, index) => item.restricted ? <article key={item.id ?? index} className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"><div className="flex items-start justify-between gap-2"><p className="text-xs text-slate-400">{formatDate(item.tanggal)}</p><WorkflowBadge status={handlingStatus(item)} /></div><p className="mt-2 truncate text-sm text-slate-400">RS: {item.rumahSakit || 'Belum diisi'} · Team: {item.team || 'Belum diisi'}</p><p className="mt-2 flex items-center gap-1.5 text-sm text-slate-500"><Lock aria-hidden="true" className="h-4 w-4 shrink-0" />Dilaporkan pengguna lain, isi laporan tidak dapat diakses</p></article> : <article key={item.id ?? index} className={`min-w-0 rounded-2xl border p-4 shadow-sm ${workflowCardStyle(item, today())}`}>
           <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><Avatar name={item.dokter} /><h3 className="min-w-0 truncate font-semibold">{item.dokter || 'Dokter tidak tersedia'}</h3></div><WorkflowBadge status={handlingStatus(item)} /></div>
-          <div className="mt-2 flex flex-wrap gap-1.5"><Badge status={item.status} /><AlertBadge item={item} /></div>
+          <div className="mt-2 flex flex-wrap gap-1.5"><Badge status={item.status} /><AlertBadge item={item} onClick={alertAction(item)} /></div>
           <p className="mt-2 truncate text-xs text-slate-400">RS: {item.rumahSakit || 'Belum diisi'} · PIC: {item.picNama || 'Belum ditugaskan'}</p>
           {item.tenggat && <p className={`mt-1 text-xs ${isOverdue(item, today()) ? 'font-semibold text-red-300' : 'text-slate-400'}`}>Tenggat: {formatDate(item.tenggat)}{isOverdue(item, today()) ? ' · Terlambat' : ''}</p>}
           <p className="mt-2 truncate text-sm text-slate-300">{item.tindakan || '—'}{(item.jalanKeluar || item.komplain) ? ` | ${item.jalanKeluar || item.komplain}` : ''}</p>
