@@ -33,7 +33,7 @@ function Avatar({ name }) {
   return <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">{initials(name)}</span>;
 }
 
-export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onOpenPicAction, onReopen, onExpired }) {
+export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onOpenPicAction, onReopen, onExpired, onMarkRead }) {
   const [view, setView] = useState('table');
   const [periodMode, setPeriodMode] = useState('week');
   const [selectedDate, setSelectedDate] = useState(() => weekStart(today()));
@@ -56,6 +56,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const detailReturnFocus = useRef(null);
   const tableViewButton = useRef(null);
   const openDetail = async (item) => {
+    onMarkRead?.(item.id);
     detailReturnFocus.current = document.activeElement;
     const version = ++detailVersion.current;
     setDetail(item); setHistory([]); setDetailError(''); setDetailLoading(true);

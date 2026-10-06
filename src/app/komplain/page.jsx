@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { PlusCircle, X, CheckCircle2, Lightbulb, AlertTriangle, UserRound, Inbox } from 'lucide-react';
 import DataView from './data-view';
@@ -18,6 +18,7 @@ import AlertBadge from './alert-badge';
 import ImplantBadge from './implant-badge';
 import { apiRequest, postJson } from './api-client.mjs';
 import { ROLE_LABELS, handlingStatus, isOverdue } from './workflow.mjs';
+import { loadReadIds, saveReadIds } from './read-tracking.mjs';
 
 const LEVELS = [
   { code: 'C1 - Critical', label: 'C1 Critical', color: 'text-red-300 border-red-800 bg-red-950/40' },
@@ -73,6 +74,7 @@ export default function KomplainPage() {
   const userRef = useRef(null);
   const [assignedNotice, setAssignedNotice] = useState([]);
   const [incomingNotice, setIncomingNotice] = useState([]);
+  const [readIds, setReadIds] = useState(() => new Set());
   const [tab, setTab] = useState('form');
   const [modal, setModal] = useState(null);
   const dialogStyle = useDialogViewport(modal !== null);
@@ -99,10 +101,28 @@ export default function KomplainPage() {
     previousListRef.current = null;
     setUser(null); setList([]); setAssignees([]); setLoaded(false); setLoading(false);
     setModal(null); setEditItem(null); setWorkflowItem(null); setForm(newForm());
-    setAssignedNotice([]); setIncomingNotice([]);
+    setAssignedNotice([]); setIncomingNotice([]); setReadIds(new Set());
     setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
   }, []);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { if (user?.id) setReadIds(loadReadIds(user.id)); }, [user?.id]);
+  const markRead = useCallback((id) => {
+    if (id == null) return;
+    setReadIds((previous) => {
+      if (previous.has(id)) return previous;
+      const next = new Set(previous); next.add(id);
+      saveReadIds(userRef.current?.id, next);
+      return next;
+    });
+  }, []);
+  const markAllRead = useCallback((ids) => {
+    setReadIds((previous) => {
+      const next = new Set(previous); ids.forEach((id) => next.add(id));
+      saveReadIds(userRef.current?.id, next);
+      return next;
+    });
+  }, []);
+  const unreadItems = useMemo(() => (user && ['admin', 'petugas'].includes(user.role) ? list.filter((item) => item.id != null && item.pelaporId !== user.id && !readIds.has(item.id)) : []), [list, user, readIds]);
   useEffect(() => {
     let alive = true;
     apiRequest('/api/auth/session').then((result) => { if (alive) setUser(result.user); })
@@ -164,6 +184,7 @@ export default function KomplainPage() {
     openModal(mode);
   }
   async function openPicAction(item) {
+    markRead(item.id);
     setShowPicDetail(false); setShowPicHistory(false);
     setShowSolutionField(!!item.jalanKeluar || handlingStatus(item) === 'Selesai');
     setShowNextPlanField(!!item.penangananSelanjutnya);
@@ -206,13 +227,13 @@ export default function KomplainPage() {
   }
   const titles = { form: editItem ? 'Edit laporan komplain' : 'Buat laporan komplain', review: 'Tinjau laporan', delete: 'Arsipkan laporan?', assign: 'Tentukan penanggung jawab', selfAssign: 'Ambil laporan sebagai PIC', picAction: 'Detail & Tindak Lanjut', reopen: 'Buka kembali laporan', success: 'Berhasil' };
   const descriptions = { form: 'Isi kolom bertanda *. Solusi awal boleh dikosongkan.', review: 'Pastikan informasi sudah benar sebelum disimpan.', delete: 'Laporan disembunyikan dari daftar aktif. Data dan riwayat tetap tersimpan.', assign: 'Pilih petugas atau pelapor aktif untuk menangani kasus ini, lalu tentukan tenggat.', selfAssign: 'Anda akan menjadi penanggung jawab dan dapat langsung melakukan tindak lanjut.', picAction: 'Tinjau informasi lengkap laporan, lalu catat perkembangan penanganan dan rencana lanjutan.', reopen: 'Jelaskan mengapa masalah masih membutuhkan penanganan.', success: successText };
-  const header = <Navbar user={user} tab={tab} setTab={setTab} loading={loading} busy={busy} loggingOut={loggingOut} onRefresh={fetchData} onLogout={logout} newButtonRef={newButton} masterButtonRef={masterButton} />;
+  const header = <Navbar user={user} tab={tab} setTab={setTab} loading={loading} busy={busy} loggingOut={loggingOut} onRefresh={fetchData} onLogout={logout} newButtonRef={newButton} masterButtonRef={masterButton} unreadItems={unreadItems} formatDate={formatDate} onOpenNotification={(item) => { markRead(item.id); setTab('table'); }} onMarkAllRead={() => markAllRead(unreadItems.map((item) => item.id))} />;
 
   return <main lang="id" data-role={user?.role || 'pelapor'} className="komplain-theme min-h-screen bg-slate-950 px-3 py-4 text-slate-100 sm:p-8"><div className="mx-auto max-w-7xl space-y-6">{header}<InstallApp role={user?.role} />
     {authChecking ? <LoadingState title="Menyiapkan Komplainer…" description="Memeriksa sesi dan hak akses Anda." /> : !user ? <LoginPanel onLogin={(next) => { setUser(next); setAuthError(''); setAuthNotice(''); }} initialError={authError} notice={authNotice} /> : ['pending', 'rejected'].includes(user.approval) ? <ApprovalPanel user={user} onApproved={setUser} onExpired={endSession} /> : user.mustChangePassword ? <PasswordPanel user={user} onChanged={endSession} onExpired={endSession} /> : tab === 'account' ? <div className="space-y-6"><ProfilePanel user={user} onChanged={endSession} onExpired={endSession} /><PasswordPanel user={user} onChanged={endSession} onExpired={endSession} /></div> : tab === 'users' && user.role === 'admin' ? <AccountsPanel currentUser={user} onExpired={endSession} /> : <>
       {loadError && <div role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200"><p className="font-semibold">Laporan gagal dimuat</p><p className="mt-1 break-words">{loadError}</p>{loaded && <p className="mt-1">Menampilkan data terakhir yang berhasil dimuat.</p>}<button disabled={loading} onClick={fetchData} className={`${buttonClass} mt-3 bg-slate-800`}>Coba lagi</button></div>}
       {loading && <LoadingState compact={loaded} title={loaded ? 'Memperbarui laporan…' : 'Memuat laporan Anda…'} description={loaded ? 'Data terbaru sedang diambil.' : 'Menyiapkan daftar laporan dan rekap mingguan.'} />}
-      {tab === 'form' ? <section aria-label="Ringkasan laporan" className="space-y-5"><div className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold">Ada kendala di lapangan?</h2><p className="mt-1 text-sm text-slate-400">Buat laporan; solusi dapat ditambahkan selama penanganan.</p></div><button onClick={() => openForm()} className={`${buttonClass} bg-blue-600 hover:bg-blue-500`}><PlusCircle aria-hidden="true" className="h-5 w-5" />Buat laporan baru</button></div><p className="text-sm text-slate-400">{user.role === 'admin' ? 'Ringkasan seluruh laporan aktif.' : 'Ringkasan laporan yang dapat Anda akses.'}</p><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[['Belum selesai', list.filter((item) => handlingStatus(item) !== 'Selesai').length], ['Selesai', list.filter((item) => handlingStatus(item) === 'Selesai').length], ['Lewat tenggat', list.filter((item) => isOverdue(item, today())).length], ['Belum ada PIC', list.filter((item) => !item.picId && handlingStatus(item) !== 'Selesai').length]].map(([label, count]) => <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p className="text-sm text-slate-400">{label}</p><p className="mt-3 text-3xl font-bold">{loaded ? count : '—'}</p></div>)}</div><div className="flex items-center justify-between"><h2 className="font-semibold">Tingkat Urgensi</h2><span className="text-sm text-slate-400">Laporan Masuk: {loaded ? list.length : '—'} laporan</span></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{LEVELS.map((level) => <div key={level.code} className={`rounded-2xl border p-5 ${level.color}`}><p className="text-sm font-semibold">{level.label}</p><p className="mt-3 text-3xl font-bold text-white">{loaded ? list.filter((item) => item.status === level.code).length : '—'}</p><p className="mt-1 text-xs">laporan</p></div>)}</div></section> : <DataView list={list} loaded={loaded} loading={loading} loadError={loadError} busy={busy} user={user} levels={LEVELS} Badge={Badge} formatDate={formatDate} today={today} onCreate={() => openForm()} onEdit={openForm} onDelete={(item) => openWorkflow('delete', item)} onAssign={(item) => openWorkflow('assign', item)} onSelfAssign={(item) => openWorkflow('selfAssign', item)} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onExpired={endSession} />}
+      {tab === 'form' ? <section aria-label="Ringkasan laporan" className="space-y-5"><div className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold">Ada kendala di lapangan?</h2><p className="mt-1 text-sm text-slate-400">Buat laporan; solusi dapat ditambahkan selama penanganan.</p></div><button onClick={() => openForm()} className={`${buttonClass} bg-blue-600 hover:bg-blue-500`}><PlusCircle aria-hidden="true" className="h-5 w-5" />Buat laporan baru</button></div><p className="text-sm text-slate-400">{user.role === 'admin' ? 'Ringkasan seluruh laporan aktif.' : 'Ringkasan laporan yang dapat Anda akses.'}</p><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[['Belum selesai', list.filter((item) => handlingStatus(item) !== 'Selesai').length], ['Selesai', list.filter((item) => handlingStatus(item) === 'Selesai').length], ['Lewat tenggat', list.filter((item) => isOverdue(item, today())).length], ['Belum ada PIC', list.filter((item) => !item.picId && handlingStatus(item) !== 'Selesai').length]].map(([label, count]) => <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p className="text-sm text-slate-400">{label}</p><p className="mt-3 text-3xl font-bold">{loaded ? count : '—'}</p></div>)}</div><div className="flex items-center justify-between"><h2 className="font-semibold">Tingkat Urgensi</h2><span className="text-sm text-slate-400">Laporan Masuk: {loaded ? list.length : '—'} laporan</span></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{LEVELS.map((level) => <div key={level.code} className={`rounded-2xl border p-5 ${level.color}`}><p className="text-sm font-semibold">{level.label}</p><p className="mt-3 text-3xl font-bold text-white">{loaded ? list.filter((item) => item.status === level.code).length : '—'}</p><p className="mt-1 text-xs">laporan</p></div>)}</div></section> : <DataView list={list} loaded={loaded} loading={loading} loadError={loadError} busy={busy} user={user} levels={LEVELS} Badge={Badge} formatDate={formatDate} today={today} onCreate={() => openForm()} onEdit={openForm} onDelete={(item) => openWorkflow('delete', item)} onAssign={(item) => openWorkflow('assign', item)} onSelfAssign={(item) => openWorkflow('selfAssign', item)} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onExpired={endSession} onMarkRead={markRead} />}
     </>}
   </div>
   {loggingOut && <div className="mx-auto mt-6 max-w-md"><LoadingState compact title="Keluar dari akun…" description="Mengakhiri sesi Anda dengan aman." /></div>}
