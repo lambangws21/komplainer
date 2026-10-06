@@ -1,5 +1,6 @@
 import { callScript, json, errorResponse, readBody, assertSameOrigin, ApiError } from '@/lib/server/apps-script';
 
+export const maxDuration = 30;
 export async function GET(request) {
   try {
     const id = new URL(request.url).searchParams.get('id');

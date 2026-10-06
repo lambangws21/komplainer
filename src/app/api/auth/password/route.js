@@ -2,6 +2,7 @@ import { callScript, json, errorResponse, readBody, assertSameOrigin, clearSessi
 import { usesFirebase, firebaseAuth, requireFirebaseSession, firebasePasswordLogin, clearFirebaseSession } from '@/lib/server/firebase-auth';
 import { currentFirebaseUser, writeFirebaseMetadata } from '@/lib/server/firebase-accounts';
 import { hashPassword, verifyPassword, validatePassword } from '@/lib/server/password.mjs';
+export const maxDuration = 30;
 export async function POST(request) {
   try {
     assertSameOrigin(request);

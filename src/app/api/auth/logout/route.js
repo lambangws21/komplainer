@@ -1,5 +1,6 @@
 import { callScript, json, errorResponse, assertSameOrigin, clearSession } from '@/lib/server/apps-script';
 import { usesFirebase, clearFirebaseSession } from '@/lib/server/firebase-auth';
+export const maxDuration = 30;
 export async function POST(request) {
   try {
     assertSameOrigin(request);
