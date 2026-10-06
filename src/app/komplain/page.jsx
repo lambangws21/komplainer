@@ -235,12 +235,24 @@ export default function KomplainPage() {
     let payload;
     if (action === 'save') payload = { action: editItem ? 'update' : 'create', ...(editItem ? { id: editItem.id, version: editItem.version } : { requestId: draftRequestId.current }), ...form };
     else payload = { action, id: workflowItem.id, version: workflowItem.version, ...workflow };
+    const wasSelfAssign = action === 'assign' && modal === 'selfAssign';
+    let result;
     try {
-      await apiRequest('/api/komplain', postJson(payload));
-      setSuccessText({ save: editItem ? 'Perubahan laporan disimpan.' : 'Laporan terkirim. Pantau tindak lanjut di daftar laporan.', delete: 'Laporan diarsipkan. Data dan riwayat tetap tersimpan di sheet.', assign: 'Penanggung jawab dan tenggat diperbarui.', followUp: 'Tindak lanjut berhasil disimpan.', reopen: 'Laporan dibuka kembali.' }[action]);
-      setModal('success'); setTab('table'); void fetchData();
-    } catch (error) { if (error.code === 401) endSession(); else setActionError(error.message); }
-    finally { mutationLock.current = false; setBusy(false); }
+      result = await apiRequest('/api/komplain', postJson(payload));
+    } catch (error) {
+      mutationLock.current = false; setBusy(false);
+      if (error.code === 401) endSession(); else setActionError(error.message);
+      return;
+    }
+    mutationLock.current = false; setBusy(false);
+    void fetchData();
+    if (wasSelfAssign) {
+      setTab('table');
+      await openPicAction(result.data || workflowItem);
+      return;
+    }
+    setSuccessText({ save: editItem ? 'Perubahan laporan disimpan.' : 'Laporan terkirim. Pantau tindak lanjut di daftar laporan.', delete: 'Laporan diarsipkan. Data dan riwayat tetap tersimpan di sheet.', assign: 'Penanggung jawab dan tenggat diperbarui.', followUp: 'Tindak lanjut berhasil disimpan.', reopen: 'Laporan dibuka kembali.' }[action]);
+    setModal('success'); setTab('table');
   }
   async function logout() {
     if (loggingOut || busy) return;
