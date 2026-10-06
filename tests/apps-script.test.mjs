@@ -18,7 +18,8 @@ test('migration preserves old rows and headers and never selects the summary she
   assert.ok(f.ss.getSheetByName('Rekapan Mingguan'));
   assert.equal(f.request({ action: 'list', ...f.adminSession }).data[0].id, 'OLD-1');
   const pelapor = f.addUser('reporter@example.test');
-  assert.equal(f.request({ action: 'list', ...pelapor }).data.length, 0);
+  assert.equal(f.request({ action: 'list', ...pelapor }).data.length, 1);
+  assert.equal(f.request({ action: 'list', ...pelapor }).data[0].restricted, true);
 });
 test('unauthenticated and forged-role requests cannot access reports', () => {
   const f = createFixture();
@@ -28,9 +29,9 @@ test('unauthenticated and forged-role requests cannot access reports', () => {
   const a = f.addUser('a@example.test');
   const b = f.addUser('b@example.test');
   const item = f.createReport(a).data;
-  assert.equal(f.request({ action: 'list', ...b, role: 'admin' }).data.length, 0);
+  assert.equal(f.request({ action: 'list', ...b, role: 'admin' }).data.length, 1);
   assert.equal(f.request({ action: 'detail', ...b, id: item.id }).code, 404);
-  assert.equal(f.request({ action: 'delete', ...a, id: item.id, version: 1, role: 'admin' }).code, 403);
+  assert.equal(f.request({ action: 'delete', ...b, id: item.id, version: 1, role: 'admin' }).code, 404);
 });
 test('assignment, follow-up, completion and reopen enforce permissions and versions', () => {
   const f = createFixture();
@@ -43,7 +44,7 @@ test('assignment, follow-up, completion and reopen enforce permissions and versi
   assert.equal(f.request({ action: 'assign', ...reporter, id: item.id, version: item.version, picId: pic.user.id }).code, 403);
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id, tenggat: '2026-10-05' }).data;
   assert.equal(f.request({ action: 'list', ...pic }).data.length, 1);
-  assert.equal(f.request({ action: 'list', ...other }).data.length, 0);
+  assert.equal(f.request({ action: 'list', ...other }).data.length, 1);
   assert.equal(f.request({ action: 'followUp', ...pic, id: item.id, version: 1, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 409);
   assert.equal(f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: '', catatan: 'Selesai' }).code, 400);
   item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', jalanKeluar: '', catatan: 'Mulai diperiksa' }).data;
@@ -179,7 +180,7 @@ test('admin delegates a case to a reporter without granting global access or cha
   const other = f.addUser('other@example.test');
   let item = f.createReport(owner).data;
   const unrelated = f.createReport(owner).data;
-  assert.equal(f.request({ action: 'list', ...delegate }).data.length, 0);
+  assert.equal(f.request({ action: 'list', ...delegate }).data.length, 2);
   assert.ok(f.request({ action: 'list', ...f.adminSession }).assignees.some((user) => user.id === delegate.user.id));
   assert.equal(f.request({ action: 'assign', ...delegate, id: item.id, version: 1, picId: delegate.user.id }).code, 404);
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: 1, picId: delegate.user.id }).data;
@@ -189,7 +190,7 @@ test('admin delegates a case to a reporter without granting global access or cha
   assert.equal(delegatedRow.picRole, 'pelapor');
   assert.equal('passwordHash' in delegatedRow, false);
   assert.equal(f.request({ action: 'session', ...delegate }).user.role, 'pelapor');
-  assert.equal(f.request({ action: 'list', ...delegate }).data.length, 1);
+  assert.equal(f.request({ action: 'list', ...delegate }).data.length, 2);
   assert.equal(f.request({ action: 'detail', ...delegate, id: unrelated.id }).code, 404);
   assert.equal(f.request({ action: 'followUp', ...owner, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Bukan PIC' }).code, 403);
   assert.equal(canFollowUp(item, delegate.user), true);
@@ -217,7 +218,7 @@ test('reporter can set and edit a report team without changing account unit or a
   item = f.request({ action: 'update', ...reporter, ...item, team: 'Unit Revisi' }).data;
   assert.equal(item.team, 'Unit Revisi');
   assert.equal(f.request({ action: 'session', ...reporter }).user.unit, 'Unit A');
-  assert.equal(f.request({ action: 'list', ...other }).data.length, 0);
+  assert.equal(f.request({ action: 'list', ...other }).data.length, 1);
   assert.equal(f.request({ action: 'update', ...other, ...item, team: 'Unit Lain' }).code, 404);
 });
 
@@ -241,6 +242,38 @@ test('hospital persists through create, edit and follow-up and old clients prese
   assert.equal(f.request({ ...f.adminSession, action: 'detail', id: item.id }).data.rumahSakit, 'RS Sehat');
 });
 
+test('non-owners see status-only summaries, never report content, in list results', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner@example.test');
+  const stranger = f.addUser('stranger@example.test');
+  const item = f.createReport(owner, { dokter: 'dr. Rahasia', komplain: 'Isi rahasia' }).data;
+  const summary = f.request({ action: 'list', ...stranger }).data[0];
+  assert.equal(summary.id, item.id);
+  assert.equal(summary.restricted, true);
+  assert.equal(summary.status, item.status);
+  assert.equal(summary.statusPenanganan, item.statusPenanganan);
+  assert.equal('dokter' in summary, false);
+  assert.equal('komplain' in summary, false);
+  assert.equal('jalanKeluar' in summary, false);
+  assert.equal('pelaporNama' in summary, false);
+  const full = f.request({ action: 'list', ...owner }).data[0];
+  assert.equal(full.restricted, undefined);
+  assert.equal(full.dokter, 'dr. Rahasia');
+});
+test('report owner can delete their own untouched report, but not once handling has started', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner@example.test');
+  const stranger = f.addUser('stranger@example.test');
+  const item = f.createReport(owner).data;
+  assert.equal(f.request({ action: 'delete', ...stranger, id: item.id, version: item.version }).code, 404);
+  assert.equal(f.request({ action: 'delete', ...owner, id: item.id, version: item.version }).status, 'success');
+  const second = f.createReport(owner).data;
+  const pic = f.addUser('pic@example.test', 'petugas');
+  const assigned = f.request({ action: 'assign', ...f.adminSession, id: second.id, version: second.version, picId: pic.user.id }).data;
+  const inProgress = f.request({ action: 'followUp', ...pic, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Mulai' }).data;
+  assert.equal(f.request({ action: 'delete', ...owner, id: inProgress.id, version: inProgress.version }).code, 403);
+  assert.equal(f.request({ action: 'delete', ...f.adminSession, id: inProgress.id, version: inProgress.version }).status, 'success');
+});
 test('existing nineteen-column sheet gains hospital header without shifting report data', () => {
   const f = createFixture();
   const created = f.createReport(f.adminSession).data;

@@ -192,6 +192,8 @@ function publicReport(item, accounts) {
   return result;
 }
 function canRead(item, user) { return user.role === 'admin' || item.pelaporId === user.id || item.picId === user.id; }
+// Other users may see that a case exists and its status, never its content.
+function summaryReport(item) { return { id: item.id, tanggal: item.tanggal, team: item.team, rumahSakit: item.rumahSakit, status: item.status, statusPenanganan: item.statusPenanganan, tenggat: item.tenggat, updatedAt: item.updatedAt, restricted: true }; }
 function findReport(id, user) {
   var item = reports().filter(function (value) { return value.id === String(id); })[0];
   if (!item || !canRead(item, user)) fail('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
@@ -387,7 +389,7 @@ function handle(body) {
   }
   if (action === 'list') {
     var accounts = allUsers();
-    return { status: 'success', data: reports().filter(function (item) { return canRead(item, user); }).map(function (item) { return publicReport(item, accounts); }), assignees: user.role === 'admin' ? accounts.filter(function (item) { return item.active && (item.role === 'petugas' || item.role === 'pelapor'); }).map(publicUser) : [] };
+    return { status: 'success', data: reports().map(function (item) { return canRead(item, user) ? publicReport(item, accounts) : summaryReport(item); }), assignees: user.role === 'admin' ? accounts.filter(function (item) { return item.active && (item.role === 'petugas' || item.role === 'pelapor'); }).map(publicUser) : [] };
   }
   if (action === 'detail') {
     var detail = findReport(body.id, user);
@@ -426,7 +428,7 @@ function handle(body) {
     if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
     item.status = body.status;
   } else if (action === 'delete') {
-    requireAdmin(user);
+    if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
     item.deletedAt = nowIso();
   } else if (action === 'assign') {
     requireAdmin(user);

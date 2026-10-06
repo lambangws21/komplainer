@@ -59,7 +59,7 @@ test('data-only Apps Script uses verified server context and does not create acc
   assert.equal(f.request({ action: 'list', firebaseContext, apiKey: 'wrong' }).code, 403);
   assert.equal(f.request({ action: 'users', firebaseContext }).code, 403);
   const other = { ...user, id: profileId('other') };
-  assert.equal(f.request({ action: 'list', firebaseContext: { user: other, accounts: [user, other] } }).data.length, 0);
+  assert.equal(f.request({ action: 'list', firebaseContext: { user: other, accounts: [user, other] } }).data.length, 1);
   assert.equal(f.ss.getSheetByName('Pengguna'), undefined);
   assert.equal(f.ss.getSheetByName('Sesi'), undefined);
   assert.equal(f.context.FIREBASE_DIRECTORY, null);
