@@ -76,6 +76,18 @@ test('temporary password, revocation, last admin and active assignments are prot
   const users = f.request({ action: 'users', ...f.adminSession });
   assert.equal(JSON.stringify(users).includes('passwordHash'), false);
 });
+test('promoting a legacy pelapor-PIC to petugas does not require transferring their active case first', () => {
+  const f = createFixture();
+  const legacyDelegate = f.addUser('legacy-delegate@example.test');
+  const owner = f.addUser('legacy-owner@example.test');
+  const item = f.createReport(owner).data;
+  // Simulate pre-existing data from before delegation was restricted to petugas accounts.
+  f.data.data[1][8] = 'Diproses';
+  f.data.data[1][9] = legacyDelegate.user.id;
+  assert.equal(f.request({ action: 'updateUser', ...f.adminSession, ...legacyDelegate.user, role: 'admin', active: true }).code, 409);
+  assert.equal(f.request({ action: 'updateUser', ...f.adminSession, ...legacyDelegate.user, role: 'pelapor', active: false }).code, 409);
+  assert.equal(f.request({ action: 'updateUser', ...f.adminSession, ...legacyDelegate.user, role: 'petugas', active: true }).status, 'success');
+});
 test('create retry is idempotent and spreadsheet formulas are escaped; archive preserves data', () => {
   const f = createFixture();
   const reporter = f.addUser('reporter@example.test');

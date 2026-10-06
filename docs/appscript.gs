@@ -372,8 +372,8 @@ function handle(body) {
       var role = body.role;
       if (ROLES.indexOf(role) === -1 || typeof body.active !== 'boolean') fail('Peran atau status akun tidak valid.');
       if (target.role === 'admin' && target.active && (role !== 'admin' || !body.active) && all.filter(function (item) { return item.role === 'admin' && item.active; }).length === 1) fail('Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan perannya.', 409);
-      // Active assigned cases must first be transferred to another PIC.
-      if ((!body.active || role !== target.role) && reports().some(function (item) { return item.picId === target.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
+      // Active assigned cases must first be transferred away, unless the new role still keeps them a valid PIC.
+      if ((!body.active || role !== 'petugas') && reports().some(function (item) { return item.picId === target.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
       var newEmail = target.email === 'lambangws' ? loginField(body.email) : emailField(body.email);
       if (all.some(function (item) { return item.email === newEmail && item.id !== target.id; })) fail('Email sudah terdaftar.', 409);
       sheet.getRange(target.row, 2, 1, 4).setValues([safeRow([textField(body.nama, 'Nama', true), newEmail, role, textField(body.unit, 'Unit', true)])]);
@@ -385,7 +385,8 @@ function handle(body) {
   }
   if (action === 'accountGuard') {
     requireAdmin(user);
-    if (reports().some(function (item) { return item.picId === body.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
+    // Promoting/keeping someone as petugas never orphans their active cases; only block changes that would.
+    if ((body.active === false || body.role !== 'petugas') && reports().some(function (item) { return item.picId === body.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
     return { status: 'success' };
   }
   if (action === 'list') {

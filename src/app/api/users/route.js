@@ -61,7 +61,7 @@ export async function POST(request) {
       assertUsernameAvailable(accounts, username, target.firebaseUid);
       const metadata = { role: body.role, unit, active: body.active, mustChangePassword: target.mustChangePassword, username };
       appClaims(await auth.getUser(target.firebaseUid), metadata);
-      if (!body.active || body.role !== target.role) await callScript('accountGuard', { id: target.id });
+      if (!body.active || body.role !== target.role) await callScript('accountGuard', { id: target.id, role: body.role, active: body.active });
       await auth.updateUser(target.firebaseUid, { email, displayName: nama, disabled: !body.active });
       await writeFirebaseMetadata(target.firebaseUid, metadata);
       await auth.revokeRefreshTokens(target.firebaseUid);
