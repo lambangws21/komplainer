@@ -160,7 +160,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <label className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="sr-only">Urutkan laporan</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={input}><option value="newest">Baru masuk dahulu</option><option value="oldest">Lama dahulu</option></select></label>
         </div>
 
-        <div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}
+        <div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setOnlyMine(false); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}
           <button type="button" aria-pressed={onlyMine} onClick={() => { setOnlyMine((value) => !value); setPage(1); }} className={`${control} ${onlyMine ? 'bg-violet-600' : 'bg-slate-800 text-slate-300'}`}><UserRound aria-hidden="true" className="h-4 w-4" />Tugas saya{myTaskCount > 0 && ` (${myTaskCount})`}</button>
         </div>
 
