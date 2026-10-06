@@ -1,7 +1,7 @@
 'use client';
 import LoadingState from './loading-state';
 import { useDialogViewport } from './use-dialog-viewport';
-import { mobileDialog, dialogHeader, dialogBody } from './ui-styles.mjs';
+import { mobileDialog, dialogHeader, dialogBody, historyNote } from './ui-styles.mjs';
 
 import { useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -79,6 +79,12 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
       });
   }, [list, summary, search, level, workflowFilter, onlyMine, implantFilter, user.id, period, rangeStart, rangeEnd, sort]);
   const myTaskCount = useMemo(() => list.filter((item) => item.picId === user.id).length, [list, user.id]);
+  const roleLegend = useMemo(() => list.reduce((seen, item) => ({
+    admin: seen.admin || item.pelaporRole === 'admin' || item.picRole === 'admin',
+    pelapor: seen.pelapor || item.pelaporRole === 'pelapor',
+    petugas: seen.petugas || (!!item.picId && item.picRole === 'petugas'),
+    delegated: seen.delegated || (!!item.picId && item.picRole === 'pelapor'),
+  }), { admin: false, pelapor: false, petugas: false, delegated: false }), [list]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -115,7 +121,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   </div>;
 
   return <section aria-label="Data dan rekap komplain" className="space-y-5">
-    <div aria-label="Legenda warna peran" className="flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>Peran:</span><RoleBadge role="admin" /><RoleBadge role="pelapor" /><RoleBadge role="petugas" /><RoleBadge role="pelapor" pic /></div>
+    {(roleLegend.admin || roleLegend.pelapor || roleLegend.petugas || roleLegend.delegated) && <div aria-label="Legenda warna peran" className="flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>Peran:</span>{roleLegend.admin && <RoleBadge role="admin" />}{roleLegend.pelapor && <RoleBadge role="pelapor" />}{roleLegend.petugas && <RoleBadge role="petugas" />}{roleLegend.delegated && <RoleBadge role="pelapor" pic />}</div>}
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Pusat laporan</p><h2 className="mt-1 text-2xl font-bold">Data & Rekap Komplain</h2><p className="mt-1 text-sm text-slate-400">{user.role === 'admin' ? 'Kelola seluruh laporan dan pantau penyelesaian setiap minggu.' : 'Laporan dan rekap ini hanya mencakup data yang dapat Anda akses.'}</p></div><button onClick={onCreate} className={`${control} shrink-0 bg-blue-600 hover:bg-blue-500`}><PlusCircle aria-hidden="true" className="h-4 w-4" />Buat laporan</button></div>
     <div aria-label="Tampilan data" className="flex w-full gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1 sm:w-fit">
       {[['table', 'Data tabel', Table2], ['weekly', 'Rekap', BarChart3]].map(([value, label, Icon]) => <button key={value} ref={value === 'table' ? tableViewButton : undefined} aria-pressed={view === value} onClick={() => setView(value)} className={`${control} flex-1 whitespace-nowrap sm:flex-none ${view === value ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}><Icon aria-hidden="true" className="h-4 w-4" />{label}</button>)}
@@ -194,7 +200,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
       <dl className="grid grid-cols-2 gap-3 rounded-xl border border-slate-800 bg-slate-800/30 p-4">{[['Tanggal', formatDate(detail.tanggal), null], ['Pelapor', detail.pelaporNama || 'Data lama (admin)', detail.pelaporRole], ['Dokter', detail.dokter, null], ['Team', detail.team, null], ['Rumah Sakit', detail.rumahSakit || 'Belum diisi', null], ['PIC', detail.picNama, detail.picId ? detail.picRole : null], ['Tindakan', detail.tindakan, null], ['Tenggat', detail.tenggat ? formatDate(detail.tenggat) : 'Belum ditentukan', null]].map(([label, value, role]) => <div key={label} className="min-w-0"><dt className="text-xs text-slate-400">{label}</dt><dd className="mt-1 flex flex-wrap items-center gap-1.5 break-words text-sm font-medium">{value ? <>{value}{role && <RoleBadge role={role} pic={label === 'PIC'} />}</> : label === 'PIC' ? <span className="flex items-center gap-1.5 text-slate-400"><UserRound aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Belum ditugaskan</span> : '—'}</dd></div>)}</dl>
       {detail.selesaiPada && <p className="text-xs text-slate-400">Selesai pada {new Date(detail.selesaiPada).toLocaleString('id-ID')}</p>}
       {[['Masalah', detail.komplain, 'border-red-900/50 bg-red-950/20 text-red-200', AlertCircle], ['Penyelesaian tindak lanjut', detail.jalanKeluar, 'border-emerald-900/50 bg-emerald-950/20 text-emerald-200', Wrench], ['Penanganan selanjutnya', detail.penangananSelanjutnya, 'border-violet-900/50 bg-violet-950/20 text-violet-200', ListChecks]].map(([label, value, color, Icon]) => <div key={label} className={`rounded-xl border p-4 ${color}`}><h3 className="flex items-center gap-2 text-sm font-semibold"><Icon aria-hidden="true" className="h-4 w-4 shrink-0" />{label}</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{value || '—'}</p></div>)}
-      <section className="border-t border-slate-800 pt-5"><h3 className="font-semibold">Riwayat tindak lanjut</h3>{detailLoading && <div className="mt-3"><LoadingState compact title="Memuat riwayat…" description="Mengambil perkembangan terbaru laporan ini." /></div>}{detailError && <p role="alert" className="mt-3 text-sm text-red-300">{detailError}</p>}{!detailLoading && !detailError && !history.length && <p className="mt-3 text-sm text-slate-400">Belum ada riwayat. Data lama akan memiliki riwayat setelah diperbarui.</p>}<ol className="mt-4 space-y-4">{history.map((entry) => <li key={entry.id} className="border-l-2 border-blue-800 pl-4"><p className="text-sm font-semibold">{entry.aksi}</p><p className="mt-1 break-words text-xs text-slate-400">{entry.nama} · {new Date(entry.tanggal).toLocaleString('id-ID')}</p>{entry.catatan && <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{entry.catatan}</p>}</li>)}</ol></section>
+      <section className="border-t border-slate-800 pt-5"><h3 className="font-semibold">Riwayat tindak lanjut</h3>{detailLoading && <div className="mt-3"><LoadingState compact title="Memuat riwayat…" description="Mengambil perkembangan terbaru laporan ini." /></div>}{detailError && <p role="alert" className="mt-3 text-sm text-red-300">{detailError}</p>}{!detailLoading && !detailError && !history.length && <p className="mt-3 text-sm text-slate-400">Belum ada riwayat. Data lama akan memiliki riwayat setelah diperbarui.</p>}<ol className="mt-4 space-y-4">{history.map((entry) => <li key={entry.id} className="border-l-2 border-blue-800 pl-4"><p className="text-sm font-semibold">{entry.aksi}</p><p className="mt-1 break-words text-xs text-slate-400">{entry.nama} · {new Date(entry.tanggal).toLocaleString('id-ID')}</p>{entry.catatan && <p className={`mt-2 ${historyNote}`}>{entry.catatan}</p>}</li>)}</ol></section>
       <Dialog.Close className={`${control} w-full bg-slate-800`}><X aria-hidden="true" className="h-4 w-4" />Tutup detail</Dialog.Close>
     </div>}</Dialog.Content></Dialog.Portal></Dialog.Root>
   </section>;
