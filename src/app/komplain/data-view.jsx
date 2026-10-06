@@ -5,8 +5,9 @@ import { mobileDialog, dialogHeader, dialogBody } from './ui-styles.mjs';
 
 import { useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, CalendarDays, Table2, BarChart3, ArrowDownUp } from 'lucide-react';
-import { dateKey, shiftDate, summarizeWeek, weekStart } from './weekly-summary.mjs';
+import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, CalendarDays, Table2, BarChart3, ArrowDownUp, Download } from 'lucide-react';
+import { dateKey, shiftDate, shiftMonth, summarizeWeek, summarizeMonth, weekStart } from './weekly-summary.mjs';
+import { reportsToCsv, downloadCsv } from './export.mjs';
 import WorkflowBadge from './workflow-badge';
 import RoleBadge, { roleCardStyle } from './role-badge';
 import { WORKFLOW_STATUSES, canEditReport, canFollowUp, canReopen, handlingStatus, isOverdue } from './workflow.mjs';
@@ -18,6 +19,7 @@ const PAGE_SIZE = 10;
 
 export default function DataView({ list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onFollowUp, onReopen, onExpired }) {
   const [view, setView] = useState('table');
+  const [periodMode, setPeriodMode] = useState('week');
   const [selectedDate, setSelectedDate] = useState(() => weekStart(today()));
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState('Semua');
@@ -43,9 +45,9 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     } catch (error) { if (version === detailVersion.current) { setDetailError(error.message); if (error.code === 401) onExpired(); } }
     finally { if (version === detailVersion.current) setDetailLoading(false); }
   };
-  const week = useMemo(() => summarizeWeek(list, selectedDate), [list, selectedDate]);
+  const summary = useMemo(() => (periodMode === 'week' ? summarizeWeek(list, selectedDate) : summarizeMonth(list, selectedDate)), [list, selectedDate, periodMode]);
   const filtered = useMemo(() => {
-    const source = period === 'week' ? week.current : list;
+    const source = period === 'period' ? summary.current : list;
     const query = search.trim().toLocaleLowerCase('id-ID');
     return source.filter((item) => (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || String(item.status || '').split(' - ')[0] === level) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
       .sort((a, b) => {
@@ -54,18 +56,22 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
         if (!second) return -1;
         return sort === 'newest' ? second.localeCompare(first) : first.localeCompare(second);
       });
-  }, [list, week, search, level, workflowFilter, period, sort]);
+  }, [list, summary, search, level, workflowFilter, period, sort]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const highPriority = week.current.filter((item) => /^C[12] - /.test(String(item.status))).length;
-  const teams = new Set(week.current.map((item) => String(item.team || '').trim()).filter(Boolean)).size;
-  const delta = week.current.length - week.previous.length;
+  const highPriority = summary.current.filter((item) => /^C[12] - /.test(String(item.status))).length;
+  const teams = new Set(summary.current.map((item) => String(item.team || '').trim()).filter(Boolean)).size;
+  const delta = summary.current.length - summary.previous.length;
   const ready = loaded;
   const shown = (value) => ready ? value : '—';
+  const periodLabel = periodMode === 'week' ? 'minggu' : 'bulan';
   const reset = () => { setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setPeriod('all'); setPage(1); };
-  const selectWeek = (date) => { const start = weekStart(date); if (start) { setSelectedDate(start); setPage(1); } };
-  const viewWeekReports = () => { setPeriod('week'); setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setPage(1); setView('table'); tableViewButton.current?.focus(); };
+  const selectPeriod = (date) => { const start = periodMode === 'week' ? weekStart(date) : date; if (start) { setSelectedDate(start); setPage(1); } };
+  const viewPeriodReports = () => { setPeriod('period'); setSearch(''); setLevel('Semua'); setWorkflowFilter('Semua'); setPage(1); setView('table'); tableViewButton.current?.focus(); };
+  function exportFiltered() {
+    downloadCsv(`laporan-komplain-${today()}.csv`, reportsToCsv(filtered));
+  }
   const actions = (item, mobile = false) => <div className={mobile ? 'grid w-full grid-cols-2 gap-2' : 'flex flex-wrap items-center gap-1'}>
     <button aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={`${control} px-3 text-blue-300 hover:bg-blue-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail</span>}</button>
     {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Edit laporan ${item.dokter || ''}`} onClick={() => onEdit(item)} className={`${control} px-3 text-slate-300 hover:bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Edit</span>}</button>}
@@ -74,41 +80,49 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     {canReopen(item, user) && <button disabled={busy} aria-label={`Buka kembali ${item.dokter || ''}`} onClick={() => onReopen(item)} className={`${control} px-3 text-amber-300 hover:bg-amber-500/10`}><RotateCcw aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Buka kembali</span>}</button>}
     {user.role === 'admin' && <button disabled={busy || item.id == null} aria-label={`Arsipkan laporan ${item.dokter || ''}`} onClick={() => onDelete(item)} className={`${control} px-3 text-slate-300 hover:bg-red-500/10 hover:text-red-300`}><Archive aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Arsipkan</span>}</button>}
   </div>;
-  const periodPicker = <div className="flex flex-wrap items-center gap-2">
-    <button aria-label="Minggu sebelumnya" onClick={() => selectWeek(shiftDate(selectedDate, -7))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
-    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Pilih tanggal dalam minggu rekap</span><input type="date" value={selectedDate} onChange={(event) => selectWeek(event.target.value)} className={input} /></label>
-    <button aria-label="Minggu berikutnya" onClick={() => selectWeek(shiftDate(selectedDate, 7))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
-    <button onClick={() => selectWeek(today())} className={`${control} bg-slate-800 text-slate-200`}>Minggu ini</button>
+  const periodPicker = periodMode === 'week' ? <div className="flex flex-wrap items-center gap-2">
+    <button aria-label="Minggu sebelumnya" onClick={() => selectPeriod(shiftDate(selectedDate, -7))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
+    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Pilih tanggal dalam minggu rekap</span><input type="date" value={selectedDate} onChange={(event) => selectPeriod(event.target.value)} className={input} /></label>
+    <button aria-label="Minggu berikutnya" onClick={() => selectPeriod(shiftDate(selectedDate, 7))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
+    <button onClick={() => selectPeriod(today())} className={`${control} bg-slate-800 text-slate-200`}>Minggu ini</button>
+  </div> : <div className="flex flex-wrap items-center gap-2">
+    <button aria-label="Bulan sebelumnya" onClick={() => selectPeriod(shiftMonth(selectedDate, -1))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
+    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Pilih bulan rekap</span><input type="month" value={String(selectedDate).slice(0, 7)} onChange={(event) => selectPeriod(`${event.target.value}-01`)} className={input} /></label>
+    <button aria-label="Bulan berikutnya" onClick={() => selectPeriod(shiftMonth(selectedDate, 1))} className={`${control} border border-slate-700 bg-slate-900 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
+    <button onClick={() => selectPeriod(today())} className={`${control} bg-slate-800 text-slate-200`}>Bulan ini</button>
   </div>;
 
   return <section aria-label="Data dan rekap komplain" className="space-y-5">
     <div aria-label="Legenda warna peran" className="flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>Peran:</span><RoleBadge role="admin" /><RoleBadge role="pelapor" /><RoleBadge role="petugas" /><RoleBadge role="pelapor" pic /></div>
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Pusat laporan</p><h2 className="mt-1 text-2xl font-bold">Data & Rekap Komplain</h2><p className="mt-1 text-sm text-slate-400">{user.role === 'admin' ? 'Kelola seluruh laporan dan pantau penyelesaian setiap minggu.' : 'Laporan dan rekap ini hanya mencakup data yang dapat Anda akses.'}</p></div><button onClick={onCreate} className={`${control} shrink-0 bg-blue-600 hover:bg-blue-500`}><PlusCircle aria-hidden="true" className="h-4 w-4" />Buat laporan</button></div>
     <div aria-label="Tampilan data" className="flex w-full gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1 sm:w-fit">
-      {[['table', 'Data tabel', Table2], ['weekly', 'Rekap mingguan', BarChart3]].map(([value, label, Icon]) => <button key={value} ref={value === 'table' ? tableViewButton : undefined} aria-pressed={view === value} onClick={() => setView(value)} className={`${control} flex-1 whitespace-nowrap sm:flex-none ${view === value ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}><Icon aria-hidden="true" className="h-4 w-4" />{label}</button>)}
+      {[['table', 'Data tabel', Table2], ['weekly', 'Rekap', BarChart3]].map(([value, label, Icon]) => <button key={value} ref={value === 'table' ? tableViewButton : undefined} aria-pressed={view === value} onClick={() => setView(value)} className={`${control} flex-1 whitespace-nowrap sm:flex-none ${view === value ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}><Icon aria-hidden="true" className="h-4 w-4" />{label}</button>)}
     </div>
 
     {view === 'weekly' ? <div className="space-y-5">
-      <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:flex-row lg:items-center"><div><h3 className="flex items-center gap-2 font-semibold"><CalendarDays aria-hidden="true" className="h-5 w-5 text-blue-300" />{formatDate(week.start)} – {formatDate(week.end)}</h3><p className="mt-2 text-sm text-slate-400">Periode Senin–Minggu, berdasarkan tanggal kejadian.</p></div>{periodPicker}</div>
-      {week.invalidDates > 0 && <p role="status" className="rounded-xl border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">{week.invalidDates} laporan dengan tanggal tidak valid tidak disertakan dalam rekap mingguan.</p>}
+      <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:flex-row lg:items-center">
+        <div><h3 className="flex items-center gap-2 font-semibold"><CalendarDays aria-hidden="true" className="h-5 w-5 text-blue-300" />{formatDate(summary.start)} – {formatDate(summary.end)}</h3><p className="mt-2 text-sm text-slate-400">{periodMode === 'week' ? 'Periode Senin–Minggu, berdasarkan tanggal kejadian.' : 'Periode satu bulan penuh, berdasarkan tanggal kejadian.'}</p></div>
+        <div className="flex flex-wrap items-center gap-2"><div aria-label="Pilih jenis rekap" className="flex gap-1 rounded-xl border border-slate-700 bg-slate-950 p-1">{[['week', 'Mingguan'], ['month', 'Bulanan']].map(([value, label]) => <button key={value} aria-pressed={periodMode === value} onClick={() => { setPeriodMode(value); setPage(1); }} className={`${control} px-3 ${periodMode === value ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>{label}</button>)}</div>{periodPicker}</div>
+      </div>
+      {summary.invalidDates > 0 && <p role="status" className="rounded-xl border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">{summary.invalidDates} laporan dengan tanggal tidak valid tidak disertakan dalam rekap.</p>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
-        ['Total laporan', shown(week.current.length), 'Semua tingkat keparahan', 'text-blue-300'],
-        ['Perubahan jumlah', shown(`${delta > 0 ? '+' : ''}${delta}`), `Dibanding ${formatDate(shiftDate(week.start, -7))} – ${formatDate(shiftDate(week.start, -1))}`, 'text-violet-300'],
+        ['Total laporan', shown(summary.current.length), 'Semua tingkat keparahan', 'text-blue-300'],
+        ['Perubahan jumlah', shown(`${delta > 0 ? '+' : ''}${delta}`), `Dibanding periode sebelumnya`, 'text-violet-300'],
         ['Critical & Major', shown(highPriority), 'Laporan C1 dan C2', 'text-red-300'],
         ['Team Pelapor terkait', shown(teams), 'Team pelapor berbeda pada periode ini', 'text-emerald-300'],
       ].map(([label, value, hint, color]) => <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p className="text-sm text-slate-400">{label}</p><p className={`mt-3 text-3xl font-bold tabular-nums ${color}`}>{value}</p><p className="mt-2 text-xs leading-5 text-slate-400">{hint}</p></div>)}</div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{WORKFLOW_STATUSES.map((status) => <div key={status} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><WorkflowBadge status={status} /><p className="mt-3 text-2xl font-bold">{shown(week.current.filter((item) => handlingStatus(item) === status).length)}</p><p className="mt-1 text-xs text-slate-400">Status terkini untuk laporan periode ini</p></div>)}</div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{WORKFLOW_STATUSES.map((status) => <div key={status} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><WorkflowBadge status={status} /><p className="mt-3 text-2xl font-bold">{shown(summary.current.filter((item) => handlingStatus(item) === status).length)}</p><p className="mt-1 text-xs text-slate-400">Status terkini untuk laporan periode ini</p></div>)}</div>
       <div className="grid gap-5 lg:grid-cols-5">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3"><div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Distribusi harian</h3><span className="text-xs text-slate-400">Jumlah laporan</span></div><p className="mt-1 text-sm text-slate-400">Hari dengan laporan terbanyak lebih mudah terlihat.</p><div className="mt-6 space-y-3">{week.days.map((day, index) => <div key={day.date} className="flex items-center gap-3"><span className="w-12 shrink-0 text-sm text-slate-300">{['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][index]}</span><div role="img" aria-label={`${formatDate(day.date)}: ${ready ? day.count : 'belum tersedia'} laporan`} className="h-7 flex-1 overflow-hidden rounded-md bg-slate-800"><div className="h-full rounded-md bg-blue-500" style={{ width: `${day.count / Math.max(1, ...week.days.map((item) => item.count)) * 100}%` }} /></div><span className="w-7 text-right text-sm font-semibold tabular-nums">{shown(day.count)}</span></div>)}</div></div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:col-span-2"><h3 className="font-semibold">Tingkat keparahan</h3><p className="mt-1 text-sm text-slate-400">Komposisi laporan dalam periode terpilih.</p><div className="mt-5 space-y-3">{levels.map((item) => { const count = week.current.filter((report) => report.status === item.code).length; return <div key={item.code} className="flex items-center justify-between gap-2 rounded-xl bg-slate-950/60 p-3"><Badge status={item.code} /><span className="text-sm font-semibold tabular-nums">{shown(count)} <span className="ml-2 text-xs font-normal text-slate-400">{ready ? `${week.current.length ? Math.round(count / week.current.length * 100) : 0}%` : '—'}</span></span></div>; })}{week.current.some((report) => !levels.some((item) => item.code === report.status)) && <p className="text-sm text-slate-400">Belum diklasifikasikan: {week.current.filter((report) => !levels.some((item) => item.code === report.status)).length} laporan</p>}</div></div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3"><div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Distribusi harian</h3><span className="text-xs text-slate-400">Jumlah laporan</span></div><p className="mt-1 text-sm text-slate-400">Hari dengan laporan terbanyak lebih mudah terlihat.</p><div className="mt-6 space-y-3">{summary.days.map((day, index) => <div key={day.date} className="flex items-center gap-3"><span className="w-12 shrink-0 text-sm text-slate-300">{periodMode === 'week' ? ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][index] : String(index + 1)}</span><div role="img" aria-label={`${formatDate(day.date)}: ${ready ? day.count : 'belum tersedia'} laporan`} className="h-7 flex-1 overflow-hidden rounded-md bg-slate-800"><div className="h-full rounded-md bg-blue-500" style={{ width: `${day.count / Math.max(1, ...summary.days.map((item) => item.count)) * 100}%` }} /></div><span className="w-7 text-right text-sm font-semibold tabular-nums">{shown(day.count)}</span></div>)}</div></div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:col-span-2"><h3 className="font-semibold">Tingkat keparahan</h3><p className="mt-1 text-sm text-slate-400">Komposisi laporan dalam periode terpilih.</p><div className="mt-5 space-y-3">{levels.map((item) => { const count = summary.current.filter((report) => report.status === item.code).length; return <div key={item.code} className="flex items-center justify-between gap-2 rounded-xl bg-slate-950/60 p-3"><Badge status={item.code} /><span className="text-sm font-semibold tabular-nums">{shown(count)} <span className="ml-2 text-xs font-normal text-slate-400">{ready ? `${summary.current.length ? Math.round(count / summary.current.length * 100) : 0}%` : '—'}</span></span></div>; })}{summary.current.some((report) => !levels.some((item) => item.code === report.status)) && <p className="text-sm text-slate-400">Belum diklasifikasikan: {summary.current.filter((report) => !levels.some((item) => item.code === report.status)).length} laporan</p>}</div></div>
       </div>
-      {ready && !loading && !loadError && week.current.length === 0 && <p className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-400">Belum ada laporan pada minggu ini. Pilih minggu lain untuk melihat rekapan.</p>}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-900/60 bg-blue-950/20 p-5"><div><h3 className="font-semibold">Telusuri laporan minggu ini</h3><p className="mt-1 text-sm text-slate-400">Lihat rincian masalah dan solusi dari periode terpilih.</p></div><button onClick={viewWeekReports} className={`${control} bg-blue-600 hover:bg-blue-500`}>Lihat {shown(week.current.length)} laporan<ChevronRight aria-hidden="true" className="h-4 w-4" /></button></div>
+      {ready && !loading && !loadError && summary.current.length === 0 && <p className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-400">Belum ada laporan pada {periodLabel} ini. Pilih {periodLabel} lain untuk melihat rekapan.</p>}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-900/60 bg-blue-950/20 p-5"><div><h3 className="font-semibold">Telusuri laporan {periodLabel} ini</h3><p className="mt-1 text-sm text-slate-400">Lihat rincian masalah dan solusi dari periode terpilih.</p></div><button onClick={viewPeriodReports} className={`${control} bg-blue-600 hover:bg-blue-500`}>Lihat {shown(summary.current.length)} laporan<ChevronRight aria-hidden="true" className="h-4 w-4" /></button></div>
     </div> : <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
       <div className="space-y-4 p-4 sm:p-5"><div className="grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><span className="sr-only">Cari laporan</span><Search aria-hidden="true" className="absolute left-3 top-3 h-5 w-5 text-slate-400" /><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Cari dokter, rumah sakit, team, masalah, atau solusi…" className={`${input} pl-10`} /></label><label className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="sr-only">Urutkan laporan</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={input}><option value="newest">Tanggal terbaru</option><option value="oldest">Tanggal terlama</option></select></label></div>
-        <div className="flex flex-wrap items-center justify-between gap-3"><div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}</div><label className="flex items-center gap-2 text-sm text-slate-400"><span className="shrink-0">Periode</span><select className={input} value={period} onChange={(event) => { setPeriod(event.target.value); setPage(1); }}><option value="all">Semua tanggal</option><option value="week">Minggu terpilih</option></select></label></div>
-        {period === 'week' && <div className="space-y-3 rounded-xl border border-blue-900/60 bg-blue-950/20 p-3"><p className="text-sm text-blue-200">{formatDate(week.start)} – {formatDate(week.end)}</p>{periodPicker}</div>}
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p>{(search || level !== 'Semua' || workflowFilter !== 'Semua' || period !== 'all') && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}</div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div aria-label="Filter tingkat keparahan" className="flex flex-wrap gap-2">{['Semua', 'C1', 'C2', 'C3', 'C4'].map((value) => <button key={value} aria-pressed={level === value} onClick={() => { setLevel(value); setPage(1); }} className={`${control} ${level === value ? 'bg-blue-600' : 'bg-slate-800 text-slate-300'}`}>{value}</button>)}</div><label className="flex items-center gap-2 text-sm text-slate-400"><span className="shrink-0">Periode</span><select className={input} value={period} onChange={(event) => { setPeriod(event.target.value); setPage(1); }}><option value="all">Semua tanggal</option><option value="period">{periodMode === 'week' ? 'Minggu terpilih' : 'Bulan terpilih'}</option></select></label></div>
+        {period === 'period' && <div className="space-y-3 rounded-xl border border-blue-900/60 bg-blue-950/20 p-3"><p className="text-sm text-blue-200">{formatDate(summary.start)} – {formatDate(summary.end)}</p>{periodPicker}</div>}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><div className="flex flex-wrap items-center gap-2">{(search || level !== 'Semua' || workflowFilter !== 'Semua' || period !== 'all') && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Export Excel (CSV)</button></div></div>
         <label className="flex flex-wrap items-center gap-3 text-sm text-slate-400"><span>Status penanganan</span><select className={`${input} sm:max-w-xs`} value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value); setPage(1); }}><option value="Semua">Semua status</option>{WORKFLOW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
       </div>
       {rows.length > 0 && <>

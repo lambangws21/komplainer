@@ -34,3 +34,38 @@ export function summarizeWeek(records, selectedDate) {
     }),
   };
 }
+export function monthStart(value) {
+  const key = dateKey(value);
+  return key ? `${key.slice(0, 7)}-01` : null;
+}
+export function monthEnd(start) {
+  const date = new Date(`${start}T12:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+export function shiftMonth(value, months) {
+  const start = monthStart(value);
+  if (!start) return null;
+  const date = new Date(`${start}T12:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+export function summarizeMonth(records, selectedDate) {
+  const start = monthStart(selectedDate);
+  if (!start) throw new Error('Tanggal periode tidak valid');
+  const end = monthEnd(start);
+  const previousStart = shiftMonth(start, -1);
+  const previousEnd = shiftDate(start, -1);
+  const valid = records.filter((item) => dateKey(item.tanggal));
+  const current = valid.filter((item) => dateKey(item.tanggal) >= start && dateKey(item.tanggal) <= end);
+  const previous = valid.filter((item) => dateKey(item.tanggal) >= previousStart && dateKey(item.tanggal) <= previousEnd);
+  const dayCount = (new Date(`${end}T12:00:00Z`) - new Date(`${start}T12:00:00Z`)) / 86400000 + 1;
+  return {
+    start, end, current, previous, invalidDates: records.length - valid.length,
+    days: Array.from({ length: dayCount }, (_, index) => {
+      const date = shiftDate(start, index);
+      return { date, count: current.filter((item) => dateKey(item.tanggal) === date).length };
+    }),
+  };
+}
