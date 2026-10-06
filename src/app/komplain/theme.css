@@ -79,6 +79,15 @@ main.komplain-theme {
   caret-color: rgb(var(--accent));
 }
 
+/* Safari/iOS renders the date value off-center with odd margins; align it like a normal text input. */
+.komplain-theme input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+.komplain-theme input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.4);
+}
+
 .komplain-theme :is(button, a, input, select, textarea) {
   transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
