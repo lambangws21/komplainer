@@ -1,3 +1,11 @@
 - Pada Form buatkan Tutuorial atau info atau contoh pengisian pada Input Data
 - Pada Rekapan Data, Buatkan Minggu dan Bulanan, kemudian buatkan export to xml atau xlx(excel) kemudian sebelum export bisa di filter
-- Pada Tingkat Keparahan atau status di Ubah menjadi 2 Done dan Follow Up atau Selesai dan Catatan ! dengan Badge yang kontras
+- Pada Tingkat Keparahan atau status di Ubah menjadi 2 Done dan Follow Up atau Selesai dan Catatan ! dengan Badge yang kontras (Konsul)
+- Next project ketika status yang urgent atau critical akan di kirimkan ke email PIC dan admin agar dapat Follow up segera, Namun Sarankan PIC dan Admin Untuk Mengganti email yang aktif selain mengganti emailnya karena akan di kirimkan pesan urgen tadi
+- Pada PIC Buatkan untuk dapat mengedit Emailnya serta dapat login menggunakan email atau usernamenya dan tambahkan  Username saat mendaftarkan akun dan Team Pelapor buatkan Opsi TS dan Logistik karena mendaftar hanya untuk pelapor saja serta di pengaturan profile dapat mengedit username,nama,password dan email
+- Pada UI/UX Pengguna buatkan UI nya menjadi Table, Search dan Filter, button aksinya buat lebih rapih dan tertata serta data yang di tampilkan informative
+- Navbar buatkan lebih moderend dan informasi ada di atasnya serta profile letakan di navbar
+- Tolong Tambahkan Penangan Selanjutnya pada form Laporan komplain setelah solusi awal ini opsional 
+- Buatkan Agar Semua User dapat melihat Laporan masuk berserta statusnya namun tidak dapat melihat isi laporan yang ada dan hanya bisa melihat laporan yang sudah di buat dan tugas yang di berikan
+- Layout Mobile dan Letak icons dan text nya belum rapih, seperti pada modal konnfirmasi dan sukses modal, Detail modal pada detail laporan buatkan lebih simple namun tetap informatif
+- Pada semua user bisa menghapus Laporan yang sudah di buat atau mengeditnya 
