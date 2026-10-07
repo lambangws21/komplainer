@@ -10,9 +10,10 @@ var DATA_ONLY = true;
 var FIREBASE_DIRECTORY = null;
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
 var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL']);
-// Photos are uploaded to this Drive folder; set DRIVE_FOLDER_ID in Script Properties.
+// Photos are uploaded to this Drive folder. Prefer setting DRIVE_FOLDER_ID in Script Properties
+// (no redeploy needed to change it); this constant is only a fallback if that property is unset.
+var DRIVE_FOLDER_ID = '1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
 var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
-vard DRIVE_FOLDER_ID ='1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
 var MAX_PHOTOS_PER_SUBMIT = 5;
 var PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Aktif', 'Dibuat Pada', 'Wajib Ganti Password'];
@@ -183,7 +184,7 @@ function audit(id, user, action, note, detail) {
   systemSheet('Riwayat', HISTORY_HEADERS).appendRow(safeRow([Utilities.getUuid(), id, nowIso(), user.id, user.nama, action, note || '', JSON.stringify(detail || {})]));
 }
 function driveFolder() {
-  var id = props().getProperty('DRIVE_FOLDER_ID');
+  var id = props().getProperty('DRIVE_FOLDER_ID') || DRIVE_FOLDER_ID;
   if (!id) fail('Fitur foto belum dikonfigurasi. Hubungi admin (DRIVE_FOLDER_ID).', 503);
   try { return DriveApp.getFolderById(id); }
   catch (error) { fail('DRIVE_FOLDER_ID tidak valid atau tidak dapat diakses.', 503); }
