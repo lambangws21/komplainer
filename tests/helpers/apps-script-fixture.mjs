@@ -87,6 +87,6 @@ export function createFixture({ legacyRows = [] } = {}) {
     row[8] = false;
     return login(email, hash);
   }
-  const createReport = (session, overrides = {}) => request({ action: 'create', ...session, requestId: randomUUID(), tanggal: '2026-10-03', dokter: 'Dokter Uji', team: 'Unit A', tindakan: 'Pemeriksaan', komplain: 'Masalah uji', jalanKeluar: '', status: 'C3 - Moderate', ...overrides });
+  const createReport = (session, overrides = {}) => request({ action: 'create', ...session, requestId: randomUUID(), tanggal: '2026-10-03', dokter: 'Dokter Uji', team: 'Unit A', tindakan: 'Pemeriksaan', komplain: 'Masalah uji', jalanKeluar: '', statusCase: 'Ada Kendala', ...overrides });
   return { context, request, data, ss, properties, login, admin, adminSession, addUser, createReport, driveFiles };
 }

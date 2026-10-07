@@ -11,7 +11,9 @@ var FIREBASE_DIRECTORY = null;
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
 // Column label stays "Foto URL" (already provisioned on the live sheet); the cell value
 // is actually a JSON array of bare Drive file IDs — see photoUrlFromId() below.
-var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL']);
+// 'Status' (column 8, LEVELS) is now set by the PIC during triage/follow-up, not by the
+// reporter at creation — 'Status Case' is the reporter's own Sukses/Ada Kendala classification.
+var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL', 'Status Case']);
 // Photos are uploaded to this Drive folder. Prefer setting DRIVE_FOLDER_ID in Script Properties
 // (no redeploy needed to change it); this constant is only a fallback if that property is unset.
 var DRIVE_FOLDER_ID = '1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
@@ -22,6 +24,7 @@ var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Akt
 var SESSION_HEADERS = ['Token Hash', 'User ID', 'Expires At'];
 var HISTORY_HEADERS = ['ID', 'Komplain ID', 'Tanggal', 'User ID', 'Nama', 'Aksi', 'Catatan', 'Detail'];
 var LEVELS = ['C1 - Critical', 'C2 - Major', 'C3 - Moderate', 'C4 - Minor'];
+var STATUS_CASE = ['Sukses', 'Ada Kendala'];
 var WORKFLOW = ['Baru', 'Diproses', 'Menunggu', 'Selesai'];
 var ROLES = ['pelapor', 'petugas', 'admin'];
 var SUMMARY_HEADERS = ['Tanggal Rekapan', 'Total Kasus Minggu Ini'].concat(LEVELS, ['Awal Minggu', 'Akhir Minggu', 'Baru', 'Diproses', 'Menunggu', 'Selesai']);
@@ -220,7 +223,7 @@ function parseFotoIds(value) {
   catch (error) { return []; }
 }
 function report(row, index) {
-  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoIds: parseFotoIds(row[21]), row: index + 2 };
+  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || ''), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoIds: parseFotoIds(row[21]), statusCase: String(row[22] || ''), row: index + 2 };
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
 function publicReport(item, accounts) {
@@ -238,7 +241,7 @@ function publicReport(item, accounts) {
 // Petugas (PIC) are collectively responsible for triage and decisions on every incoming case.
 function canRead(item, user) { return user.role === 'admin' || user.role === 'petugas' || item.pelaporId === user.id || item.picId === user.id; }
 // Other users may see that a case exists and its status, never its content.
-function summaryReport(item) { return { id: item.id, tanggal: item.tanggal, team: item.team, rumahSakit: item.rumahSakit, status: item.status, statusPenanganan: item.statusPenanganan, tenggat: item.tenggat, updatedAt: item.updatedAt, restricted: true }; }
+function summaryReport(item) { return { id: item.id, tanggal: item.tanggal, team: item.team, rumahSakit: item.rumahSakit, status: item.status, statusCase: item.statusCase, statusPenanganan: item.statusPenanganan, tenggat: item.tenggat, updatedAt: item.updatedAt, restricted: true }; }
 function findReport(id, user) {
   var item = reports().filter(function (value) { return value.id === String(id); })[0];
   if (!item || !canRead(item, user)) fail('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
@@ -246,7 +249,7 @@ function findReport(id, user) {
 }
 function checkVersion(item, body) { if (Number(body.version) !== item.version) fail('Laporan sudah diperbarui pengguna lain. Muat ulang data lalu ulangi perubahan.', 409); }
 function writeReport(item) {
-  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoIds || [])];
+  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status || '', item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoIds || []), item.statusCase || ''];
   dataSheet().getRange(item.row, 1, 1, HEADERS.length).setValues([safeRow(values)]);
 }
 function history(id) {
@@ -456,8 +459,10 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
-    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoIds: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
-    if (LEVELS.indexOf(created.status) === -1) fail('Tingkat keparahan tidak valid.');
+    // Severity (status) is no longer set by the reporter — it starts blank and is assigned by
+    // the PIC during triage/follow-up. The reporter instead classifies the outcome themselves.
+    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: '', statusCase: body.statusCase, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoIds: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
+    if (STATUS_CASE.indexOf(created.statusCase) === -1) fail('Status case tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
     return { status: 'success', data: publicReport(created), id: id };
@@ -478,8 +483,13 @@ function handle(body) {
     item.komplain = textField(body.komplain, 'Masalah', true, 5000);
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
-    if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
-    item.status = body.status;
+    if (STATUS_CASE.indexOf(body.statusCase) === -1) fail('Status case tidak valid.');
+    item.statusCase = body.statusCase;
+    // Severity stays PIC/admin territory even during a reporter's own edit.
+    if (user.role === 'admin' && body.status !== undefined && body.status !== '') {
+      if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
+      item.status = body.status;
+    }
     if (body.photos) item.fotoIds = (item.fotoIds || []).concat(uploadPhotos(body.photos));
   } else if (action === 'delete') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
@@ -495,12 +505,22 @@ function handle(body) {
     item.picNama = pic ? pic.nama : '';
     item.tenggat = validDate(body.tenggat, true);
     if (item.statusPenanganan !== 'Baru' && !pic) fail('Laporan yang sedang ditangani harus memiliki PIC.');
+    // Triage: the PIC may set/revise severity when taking on a case.
+    if (body.status !== undefined && body.status !== '') {
+      if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
+      item.status = body.status;
+    }
   } else if (action === 'followUp') {
     if (user.role !== 'admin' && item.picId !== user.id) fail('Hanya admin atau PIC dapat memperbarui penanganan.', 403);
     if (item.statusPenanganan === 'Selesai') fail('Laporan sudah selesai. Gunakan Buka kembali untuk melanjutkan.', 409);
     if (['Diproses', 'Menunggu', 'Selesai'].indexOf(body.statusPenanganan) === -1) fail('Status penanganan tidak valid.');
     if (!item.picId) fail('Tentukan PIC sebelum memperbarui penanganan.');
     item.statusPenanganan = body.statusPenanganan;
+    // The PIC may set/revise severity while resolving the case.
+    if (body.status !== undefined && body.status !== '') {
+      if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
+      item.status = body.status;
+    }
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     item.selesaiPada = item.statusPenanganan === 'Selesai' ? nowIso() : '';

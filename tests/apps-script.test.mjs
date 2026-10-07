@@ -7,9 +7,9 @@ test('migration preserves old rows and headers and never selects the summary she
   const row = ['OLD-1', '2026-09-30', 'Dokter lama', 'Unit lama', 'Tindakan lama', 'Masalah lama', '', 'C1 - Critical'];
   const f = createFixture({ legacyRows: [row] });
   assert.deepEqual(f.data.data[1], row);
-  assert.equal(f.data.data[0].length, 22);
+  assert.equal(f.data.data[0].length, 23);
   f.context.setupKomplainer();
-  assert.equal(f.data.data[0].length, 22);
+  assert.equal(f.data.data[0].length, 23);
   const result = f.request({ action: 'list', ...f.adminSession });
   assert.equal(result.data[0].statusPenanganan, 'Baru');
   assert.equal(result.data[0].version, 1);
@@ -159,10 +159,10 @@ test('authenticated requests create missing sheets and extend legacy summary hea
   assert.deepEqual(summary.data[1], old);
   f.properties.set('COMPLAINT_SHEET_NAME', 'Komplain Baru');
   f.context.ensureSchema();
-  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 22);
+  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 23);
   f.data.maxColumns = 8;
   f.context.ensureHeaders(f.data);
-  assert.equal(f.data.maxColumns, 22);
+  assert.equal(f.data.maxColumns, 23);
   const users = f.ss.getSheetByName('Pengguna');
   users.data[0] = users.data[0].slice(0, 8);
   users.data[1] = users.data[1].slice(0, 8);
@@ -267,6 +267,7 @@ test('non-owners see status-only summaries, never report content, in list result
   assert.equal(summary.id, item.id);
   assert.equal(summary.restricted, true);
   assert.equal(summary.status, item.status);
+  assert.equal(summary.statusCase, item.statusCase);
   assert.equal(summary.statusPenanganan, item.statusPenanganan);
   assert.equal('dokter' in summary, false);
   assert.equal('komplain' in summary, false);
@@ -362,4 +363,23 @@ test('photo uploads reject unsupported types, oversized files, and too many file
   assert.equal(f.createReport(owner, { photos: [{ base64: big, mimeType: 'image/jpeg', filename: 'big.jpg' }] }).code, 400);
   const sixPhotos = Array.from({ length: 6 }, (_, index) => ({ base64: Buffer.from(`p${index}`).toString('base64'), mimeType: 'image/jpeg', filename: `p${index}.jpg` }));
   assert.equal(f.createReport(owner, { photos: sixPhotos }).code, 400);
+});
+test('reporter classifies outcome as Sukses/Ada Kendala; severity starts blank and is PIC-only', () => {
+  const f = createFixture();
+  const reporter = f.addUser('status-case@example.test');
+  const pic = f.addUser('status-case-pic@example.test', 'petugas');
+  assert.equal(f.createReport(reporter, { statusCase: 'Tidak Valid' }).code, 400);
+  // A client-supplied severity at creation is ignored — only the PIC can set it.
+  let item = f.createReport(reporter, { statusCase: 'Sukses', status: 'C1 - Critical' }).data;
+  assert.equal(item.statusCase, 'Sukses');
+  assert.equal(item.status, '');
+  // The reporter's own edit (still Baru) cannot set severity even if they send one.
+  item = f.request({ action: 'update', ...reporter, ...item, status: 'C4 - Minor' }).data;
+  assert.equal(item.status, '');
+  assert.equal(f.request({ action: 'update', ...reporter, ...item, statusCase: 'Bukan Opsi' }).code, 400);
+  // The PIC sets/revises severity while taking on and resolving the case.
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id, status: 'C2 - Major' }).data;
+  assert.equal(item.status, 'C2 - Major');
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Ditinjau', status: 'C1 - Critical' }).data;
+  assert.equal(item.status, 'C1 - Critical');
 });
