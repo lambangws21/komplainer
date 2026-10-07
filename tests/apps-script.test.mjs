@@ -343,7 +343,7 @@ test('photos are uploaded to Drive on create, appended on update, and attached t
   const photo = (name) => ({ base64: Buffer.from(`fake-bytes-${name}`).toString('base64'), mimeType: 'image/jpeg', filename: `${name}.jpg` });
   let item = f.createReport(owner, { photos: [photo('a')] }).data;
   assert.equal(item.fotoUrls.length, 1);
-  assert.match(item.fotoUrls[0], /^https:\/\/lh3\.googleusercontent\.com\/d\//);
+  assert.match(item.fotoUrls[0], /^https:\/\/drive\.google\.com\/uc\?export=view&id=/);
   assert.equal(f.driveFiles[0].sharing.access, 'ANYONE_WITH_LINK');
   item = f.request({ action: 'update', ...owner, ...item, photos: [photo('b')] }).data;
   assert.equal(item.fotoUrls.length, 2);
@@ -352,7 +352,7 @@ test('photos are uploaded to Drive on create, appended on update, and attached t
   assert.equal(item.fotoUrls.length, 2);
   const detail = f.request({ action: 'detail', ...pic, id: item.id });
   assert.equal(detail.history[0].fotoUrls.length, 1);
-  assert.match(detail.history[0].fotoUrls[0], /^https:\/\/lh3\.googleusercontent\.com\/d\//);
+  assert.match(detail.history[0].fotoUrls[0], /^https:\/\/drive\.google\.com\/uc\?export=view&id=/);
 });
 test('photo uploads reject unsupported types, oversized files, and too many files per submit', () => {
   const f = createFixture();
