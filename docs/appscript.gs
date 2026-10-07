@@ -12,6 +12,7 @@ var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain',
 var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL']);
 // Photos are uploaded to this Drive folder; set DRIVE_FOLDER_ID in Script Properties.
 var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+vard DRIVE_FOLDER_ID ='1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
 var MAX_PHOTOS_PER_SUBMIT = 5;
 var PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Aktif', 'Dibuat Pada', 'Wajib Ganti Password'];
