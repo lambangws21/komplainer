@@ -226,7 +226,9 @@ export default function KomplainPage() {
   function openForm(item) {
     setEditItem(item || null);
     if (!item) draftRequestId.current = crypto.randomUUID();
-    setForm(item ? { ...newForm(), ...Object.fromEntries(Object.keys(newForm()).map((key) => [key, String(item[key] ?? '')])), tanggal: String(item.tanggal || '').slice(0, 10) } : { ...newForm(), team: user.unit });
+    // Reports created before Status Case existed have no value for it — fall back to the
+    // default instead of leaving the radio group with nothing selected (which the server rejects).
+    setForm(item ? { ...newForm(), ...Object.fromEntries(Object.keys(newForm()).map((key) => [key, String(item[key] ?? '')])), tanggal: String(item.tanggal || '').slice(0, 10), statusCase: item.statusCase || newForm().statusCase } : { ...newForm(), team: user.unit });
     setShowFormNextPlan(!!item?.penangananSelanjutnya);
     setShowFormSolution(!!item?.jalanKeluar);
     setCustomTindakan(!!(item?.tindakan && !TINDAKAN_PRESETS.includes(item.tindakan)));
