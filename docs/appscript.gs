@@ -9,7 +9,9 @@
 var DATA_ONLY = true;
 var FIREBASE_DIRECTORY = null;
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
-var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto ID']);
+// Column label stays "Foto URL" (already provisioned on the live sheet); the cell value
+// is actually a JSON array of bare Drive file IDs — see photoUrlFromId() below.
+var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL']);
 // Photos are uploaded to this Drive folder. Prefer setting DRIVE_FOLDER_ID in Script Properties
 // (no redeploy needed to change it); this constant is only a fallback if that property is unset.
 var DRIVE_FOLDER_ID = '1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
