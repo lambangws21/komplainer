@@ -29,11 +29,15 @@ import { loadReadIds, saveReadIds } from './read-tracking.mjs';
 
 const TINDAKAN_PRESETS = ['TKR ZIMMER', 'TKR NORMMED', 'THR ZIMMER', 'UKA OXFORD ZIMMER', 'THR NORMMED', 'BIPOLAR ZIMMER'];
 const LEVELS = [
-  { code: 'C1 - Critical', label: 'C1 Critical', color: 'text-red-300 border-red-800 bg-red-950/40' },
-  { code: 'C2 - Major', label: 'C2 Major', color: 'text-orange-300 border-orange-800 bg-orange-950/40' },
-  { code: 'C3 - Moderate', label: 'C3 Moderate', color: 'text-amber-300 border-amber-800 bg-amber-950/40' },
-  { code: 'C4 - Minor', label: 'C4 Minor', color: 'text-emerald-300 border-emerald-800 bg-emerald-950/40' },
+  { code: 'C1 - Critical', label: 'C1 Critical', color: 'text-red-300 border-red-800 bg-red-950/40', accent: 'border-l-red-600' },
+  { code: 'C2 - Major', label: 'C2 Major', color: 'text-orange-300 border-orange-800 bg-orange-950/40', accent: 'border-l-orange-500' },
+  { code: 'C3 - Moderate', label: 'C3 Moderate', color: 'text-amber-300 border-amber-800 bg-amber-950/40', accent: 'border-l-amber-500' },
+  { code: 'C4 - Minor', label: 'C4 Minor', color: 'text-emerald-300 border-emerald-800 bg-emerald-950/40', accent: 'border-l-emerald-500' },
 ];
+// Colors the modal's left edge to match the case's severity, when one has been set by the PIC.
+function severityAccent(status) {
+  return LEVELS.find((level) => level.code === status)?.accent || '';
+}
 const fields = [
   ['tanggal', 'Tanggal kejadian', 'date'], ['dokter', 'Dokter', 'text'],
   ['rumahSakit', 'Rumah Sakit (opsional)', 'text'], ['team', 'Team Pelapor', 'text'], ['tindakan', 'Tindakan Operasi', 'text'],
@@ -310,7 +314,7 @@ export default function KomplainPage() {
     </>}
   </div>
   {loggingOut && <div className="mx-auto mt-6 max-w-md"><LoadingState compact title="Keluar dari akun…" description="Mengakhiri sesi Anda dengan aman." /></div>}
-  <Dialog.Root open={modal !== null && !!user} onOpenChange={(open) => { if (!open && !busy) setModal(null); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} style={dialogStyle} onCloseAutoFocus={(event) => { event.preventDefault(); const target = modalReturnFocus.current; (target?.isConnected ? target : tab === 'table' ? masterButton.current : newButton.current)?.focus(); }} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => event.preventDefault()} className={`${mobileDialog} ${modal === 'picAction' ? 'max-w-2xl' : 'max-w-xl'}`}><div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">{titles[modal]}</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{descriptions[modal]}</Dialog.Description><Dialog.Close disabled={busy} aria-label="Tutup dialog" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
+  <Dialog.Root open={modal !== null && !!user} onOpenChange={(open) => { if (!open && !busy) setModal(null); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} style={dialogStyle} onCloseAutoFocus={(event) => { event.preventDefault(); const target = modalReturnFocus.current; (target?.isConnected ? target : tab === 'table' ? masterButton.current : newButton.current)?.focus(); }} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => event.preventDefault()} className={`${mobileDialog} ${modal === 'picAction' ? 'max-w-2xl' : 'max-w-xl'} ${['assign', 'selfAssign', 'reopen', 'picAction', 'delete'].includes(modal) && severityAccent(workflowItem?.status) ? `border-l-4 ${severityAccent(workflowItem?.status)}` : ''}`}><div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">{titles[modal]}</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{descriptions[modal]}</Dialog.Description><Dialog.Close disabled={busy} aria-label="Tutup dialog" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
     {busy && <div className="mt-5"><LoadingState title={modal === 'delete' ? 'Mengarsipkan laporan…' : 'Menyimpan perubahan…'} description="Tunggu hingga konfirmasi muncul. Jangan tutup halaman." /></div>}
     <div aria-busy={busy} hidden={busy} className={dialogBody} data-dialog-scroll>
     {actionError && <p role="alert" className="mt-4 break-words rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">{actionError}</p>}
