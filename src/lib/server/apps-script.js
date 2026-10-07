@@ -53,7 +53,8 @@ export function errorResponse(error) {
 export async function readBody(request) {
   if (!request.headers.get('content-type')?.includes('application/json')) throw new ApiError('Gunakan format JSON.', 415);
   const text = await request.text();
-  if (text.length > 32000) throw new ApiError('Permintaan terlalu besar.', 413);
+  // Generous enough for a few compressed photos (base64), kept under the platform's request-size ceiling.
+  if (text.length > 4000000) throw new ApiError('Permintaan terlalu besar. Kurangi jumlah atau ukuran foto.', 413);
   try {
     const body = JSON.parse(text);
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error();

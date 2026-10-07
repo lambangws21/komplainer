@@ -9,7 +9,11 @@
 var DATA_ONLY = true;
 var FIREBASE_DIRECTORY = null;
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
-var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya']);
+var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL']);
+// Photos are uploaded to this Drive folder; set DRIVE_FOLDER_ID in Script Properties.
+var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+var MAX_PHOTOS_PER_SUBMIT = 5;
+var PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Aktif', 'Dibuat Pada', 'Wajib Ganti Password'];
 var SESSION_HEADERS = ['Token Hash', 'User ID', 'Expires At'];
 var HISTORY_HEADERS = ['ID', 'Komplain ID', 'Tanggal', 'User ID', 'Nama', 'Aksi', 'Catatan', 'Detail'];
@@ -177,8 +181,38 @@ function revokeSessions(userId, hash) {
 function audit(id, user, action, note, detail) {
   systemSheet('Riwayat', HISTORY_HEADERS).appendRow(safeRow([Utilities.getUuid(), id, nowIso(), user.id, user.nama, action, note || '', JSON.stringify(detail || {})]));
 }
+function driveFolder() {
+  var id = props().getProperty('DRIVE_FOLDER_ID');
+  if (!id) fail('Fitur foto belum dikonfigurasi. Hubungi admin (DRIVE_FOLDER_ID).', 503);
+  try { return DriveApp.getFolderById(id); }
+  catch (error) { fail('DRIVE_FOLDER_ID tidak valid atau tidak dapat diakses.', 503); }
+}
+// Uploads base64-encoded photos to Drive and returns their shareable view URLs.
+function uploadPhotos(photos) {
+  if (!photos) return [];
+  if (!Array.isArray(photos)) fail('Format foto tidak valid.');
+  if (photos.length > MAX_PHOTOS_PER_SUBMIT) fail('Maksimal ' + MAX_PHOTOS_PER_SUBMIT + ' foto per pengiriman.');
+  if (!photos.length) return [];
+  var folder = driveFolder();
+  return photos.map(function (photo) {
+    if (PHOTO_MIME_TYPES.indexOf(photo && photo.mimeType) === -1) fail('Tipe foto harus JPEG, PNG, atau WebP.');
+    var bytes;
+    try { bytes = Utilities.base64Decode(photo.base64); } catch (error) { fail('Data foto tidak valid.'); }
+    if (bytes.length > MAX_PHOTO_BYTES) fail('Ukuran setiap foto maksimal 5MB.');
+    var name = textField(photo.filename, 'Nama file', false, 200) || 'foto.jpg';
+    var blob = Utilities.newBlob(bytes, photo.mimeType, name);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  });
+}
+function parseFotoUrls(value) {
+  if (!value) return [];
+  try { var parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.filter(function (url) { return typeof url === 'string'; }) : []; }
+  catch (error) { return []; }
+}
 function report(row, index) {
-  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), row: index + 2 };
+  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoUrls: parseFotoUrls(row[21]), row: index + 2 };
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
 function publicReport(item, accounts) {
@@ -202,11 +236,16 @@ function findReport(id, user) {
 }
 function checkVersion(item, body) { if (Number(body.version) !== item.version) fail('Laporan sudah diperbarui pengguna lain. Muat ulang data lalu ulangi perubahan.', 409); }
 function writeReport(item) {
-  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || ''];
+  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoUrls || [])];
   dataSheet().getRange(item.row, 1, 1, HEADERS.length).setValues([safeRow(values)]);
 }
 function history(id) {
-  return rows(systemSheet('Riwayat', HISTORY_HEADERS), HISTORY_HEADERS.length).filter(function (row) { return String(row[1]) === id; }).map(function (row) { return { id: String(row[0]), tanggal: timestamp(row[2]), nama: clean(row[4]), aksi: clean(row[5]), catatan: clean(row[6]), detail: clean(row[7]) }; }).reverse();
+  return rows(systemSheet('Riwayat', HISTORY_HEADERS), HISTORY_HEADERS.length).filter(function (row) { return String(row[1]) === id; }).map(function (row) {
+    var rawDetail = clean(row[7]);
+    var parsedDetail = {};
+    try { parsedDetail = JSON.parse(rawDetail) || {}; } catch (error) { parsedDetail = {}; }
+    return { id: String(row[0]), tanggal: timestamp(row[2]), nama: clean(row[4]), aksi: clean(row[5]), catatan: clean(row[6]), detail: rawDetail, fotoUrls: Array.isArray(parsedDetail.fotoUrls) ? parsedDetail.fotoUrls : [] };
+  }).reverse();
 }
 function createUser(body, actor, bootstrap) {
   var users = allUsers();
@@ -406,7 +445,7 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
-    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, row: dataSheet().getLastRow() + 1 };
+    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoUrls: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
     if (LEVELS.indexOf(created.status) === -1) fail('Tingkat keparahan tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
@@ -417,6 +456,7 @@ function handle(body) {
   checkVersion(item, body);
   var note = textField(body.catatan, 'Catatan', false, 2000);
   var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat };
+  var followUpPhotoUrls = [];
   if (action === 'update') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
     item.tanggal = validDate(body.tanggal);
@@ -429,6 +469,7 @@ function handle(body) {
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
     item.status = body.status;
+    if (body.photos) item.fotoUrls = (item.fotoUrls || []).concat(uploadPhotos(body.photos));
   } else if (action === 'delete') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
     item.deletedAt = nowIso();
@@ -452,6 +493,7 @@ function handle(body) {
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     item.selesaiPada = item.statusPenanganan === 'Selesai' ? nowIso() : '';
+    followUpPhotoUrls = uploadPhotos(body.photos);
   } else if (action === 'reopen') {
     if (user.role !== 'admin' && item.pelaporId !== user.id) fail('Hanya admin atau pelapor dapat membuka kembali laporan.', 403);
     if (item.statusPenanganan !== 'Selesai' || !note) fail('Laporan harus berstatus Selesai dan alasan pembukaan wajib diisi.');
@@ -461,7 +503,7 @@ function handle(body) {
   item.updatedAt = nowIso();
   item.version += 1;
   writeReport(item);
-  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat } });
+  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat }, fotoUrls: followUpPhotoUrls.length ? followUpPhotoUrls : undefined });
   return { status: 'success', data: publicReport(item) };
 }
 

@@ -7,9 +7,9 @@ test('migration preserves old rows and headers and never selects the summary she
   const row = ['OLD-1', '2026-09-30', 'Dokter lama', 'Unit lama', 'Tindakan lama', 'Masalah lama', '', 'C1 - Critical'];
   const f = createFixture({ legacyRows: [row] });
   assert.deepEqual(f.data.data[1], row);
-  assert.equal(f.data.data[0].length, 21);
+  assert.equal(f.data.data[0].length, 22);
   f.context.setupKomplainer();
-  assert.equal(f.data.data[0].length, 21);
+  assert.equal(f.data.data[0].length, 22);
   const result = f.request({ action: 'list', ...f.adminSession });
   assert.equal(result.data[0].statusPenanganan, 'Baru');
   assert.equal(result.data[0].version, 1);
@@ -159,10 +159,10 @@ test('authenticated requests create missing sheets and extend legacy summary hea
   assert.deepEqual(summary.data[1], old);
   f.properties.set('COMPLAINT_SHEET_NAME', 'Komplain Baru');
   f.context.ensureSchema();
-  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 21);
+  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 22);
   f.data.maxColumns = 8;
   f.context.ensureHeaders(f.data);
-  assert.equal(f.data.maxColumns, 21);
+  assert.equal(f.data.maxColumns, 22);
   const users = f.ss.getSheetByName('Pengguna');
   users.data[0] = users.data[0].slice(0, 8);
   users.data[1] = users.data[1].slice(0, 8);
@@ -335,4 +335,31 @@ test('existing nineteen-column sheet gains hospital header without shifting repo
   assert.equal(f.data.data[0][19], 'Rumah Sakit');
   assert.equal(result.data.rumahSakit, '');
   assert.equal(result.data.version, created.version);
+});
+test('photos are uploaded to Drive on create, appended on update, and attached to follow-up history entries', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner-photo@example.test');
+  const pic = f.addUser('pic-photo@example.test', 'petugas');
+  const photo = (name) => ({ base64: Buffer.from(`fake-bytes-${name}`).toString('base64'), mimeType: 'image/jpeg', filename: `${name}.jpg` });
+  let item = f.createReport(owner, { photos: [photo('a')] }).data;
+  assert.equal(item.fotoUrls.length, 1);
+  assert.match(item.fotoUrls[0], /^https:\/\/drive\.example\.test\/file\//);
+  assert.equal(f.driveFiles[0].sharing.access, 'ANYONE_WITH_LINK');
+  item = f.request({ action: 'update', ...owner, ...item, photos: [photo('b')] }).data;
+  assert.equal(item.fotoUrls.length, 2);
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Diperiksa', photos: [photo('c')] }).data;
+  assert.equal(item.fotoUrls.length, 2);
+  const detail = f.request({ action: 'detail', ...pic, id: item.id });
+  assert.equal(detail.history[0].fotoUrls.length, 1);
+  assert.match(detail.history[0].fotoUrls[0], /^https:\/\/drive\.example\.test\/file\//);
+});
+test('photo uploads reject unsupported types, oversized files, and too many files per submit', () => {
+  const f = createFixture();
+  const owner = f.addUser('owner-photo-limits@example.test');
+  const big = Buffer.alloc(6 * 1024 * 1024, 1).toString('base64');
+  assert.equal(f.createReport(owner, { photos: [{ base64: Buffer.from('x').toString('base64'), mimeType: 'application/pdf', filename: 'f.pdf' }] }).code, 400);
+  assert.equal(f.createReport(owner, { photos: [{ base64: big, mimeType: 'image/jpeg', filename: 'big.jpg' }] }).code, 400);
+  const sixPhotos = Array.from({ length: 6 }, (_, index) => ({ base64: Buffer.from(`p${index}`).toString('base64'), mimeType: 'image/jpeg', filename: `p${index}.jpg` }));
+  assert.equal(f.createReport(owner, { photos: sixPhotos }).code, 400);
 });

@@ -28,8 +28,16 @@ export function createFixture({ legacyRows = [] } = {}) {
   const headers = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
   const data = new Sheet('Data Komplain', [headers, ...legacyRows]);
   const sheets = [data];
-  const properties = new Map([['APP_API_KEY', fakeKey]]);
+  const properties = new Map([['APP_API_KEY', fakeKey], ['DRIVE_FOLDER_ID', 'test-drive-folder']]);
   const cache = new Map();
+  const driveFiles = [];
+  const driveFolders = new Map([['test-drive-folder', {
+    createFile: (blob) => {
+      const file = { id: randomUUID(), blob, sharing: null, getUrl() { return `https://drive.example.test/file/${file.id}`; }, setSharing(access, permission) { file.sharing = { access, permission }; return file; } };
+      driveFiles.push(file);
+      return file;
+    },
+  }]]);
   const ss = {
     getSheets: () => sheets,
     getSheetByName: (name) => sheets.find((sheet) => sheet.name === name),
@@ -48,8 +56,15 @@ export function createFixture({ legacyRows = [] } = {}) {
       computeDigest: (_, value) => createHash('sha256').update(value).digest(),
       base64EncodeWebSafe: (value) => Buffer.from(value).toString('base64url'),
       formatDate: (date, timezone) => new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date),
+      base64Decode: (value) => Buffer.from(value, 'base64'),
+      newBlob: (bytes, mimeType, name) => ({ bytes, mimeType, name }),
     },
     ContentService: { MimeType: { JSON: 'application/json' }, createTextOutput: (text) => ({ text, setMimeType() { return this; } }) },
+    DriveApp: {
+      Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
+      Permission: { VIEW: 'VIEW' },
+      getFolderById: (id) => { const folder = driveFolders.get(id); if (!folder) throw new Error('Folder tidak ditemukan: ' + id); return folder; },
+    },
   });
   vm.runInContext(readFileSync(new URL('../../docs/appscript.gs', import.meta.url), 'utf8'), context);
   context.DATA_ONLY = false;
@@ -73,5 +88,5 @@ export function createFixture({ legacyRows = [] } = {}) {
     return login(email, hash);
   }
   const createReport = (session, overrides = {}) => request({ action: 'create', ...session, requestId: randomUUID(), tanggal: '2026-10-03', dokter: 'Dokter Uji', team: 'Unit A', tindakan: 'Pemeriksaan', komplain: 'Masalah uji', jalanKeluar: '', status: 'C3 - Moderate', ...overrides });
-  return { context, request, data, ss, properties, login, admin, adminSession, addUser, createReport };
+  return { context, request, data, ss, properties, login, admin, adminSession, addUser, createReport, driveFiles };
 }
