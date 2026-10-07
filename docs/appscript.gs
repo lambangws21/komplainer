@@ -9,7 +9,7 @@
 var DATA_ONLY = true;
 var FIREBASE_DIRECTORY = null;
 var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain', 'Jalan Keluar', 'Status'];
-var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL']);
+var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto ID']);
 // Photos are uploaded to this Drive folder. Prefer setting DRIVE_FOLDER_ID in Script Properties
 // (no redeploy needed to change it); this constant is only a fallback if that property is unset.
 var DRIVE_FOLDER_ID = '1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
@@ -189,7 +189,11 @@ function driveFolder() {
   try { return DriveApp.getFolderById(id); }
   catch (error) { fail('DRIVE_FOLDER_ID tidak valid atau tidak dapat diakses.', 503); }
 }
-// Uploads base64-encoded photos to Drive and returns their shareable view URLs.
+// Only the bare file ID is stored (sheet cell, audit detail); the URL is built fresh
+// wherever data goes out to the frontend. A pre-built URL string in a Sheets cell is
+// more fragile (export=view has ? and & in it) than a plain opaque ID.
+function photoUrlFromId(id) { return 'https://drive.google.com/uc?export=view&id=' + id; }
+// Uploads base64-encoded photos to Drive and returns their file IDs.
 function uploadPhotos(photos) {
   if (!photos) return [];
   if (!Array.isArray(photos)) fail('Format foto tidak valid.');
@@ -205,18 +209,16 @@ function uploadPhotos(photos) {
     var blob = Utilities.newBlob(bytes, photo.mimeType, name);
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    // getUrl() is Drive's viewer PAGE (HTML), not raw image bytes — unusable in <img src>.
-    // This export=view format is the one already proven to work reliably in production.
-    return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+    return file.getId();
   });
 }
-function parseFotoUrls(value) {
+function parseFotoIds(value) {
   if (!value) return [];
-  try { var parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.filter(function (url) { return typeof url === 'string'; }) : []; }
+  try { var parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.filter(function (id) { return typeof id === 'string'; }) : []; }
   catch (error) { return []; }
 }
 function report(row, index) {
-  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoUrls: parseFotoUrls(row[21]), row: index + 2 };
+  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || LEVELS[2]), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoIds: parseFotoIds(row[21]), row: index + 2 };
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
 function publicReport(item, accounts) {
@@ -226,6 +228,8 @@ function publicReport(item, accounts) {
   var pic = users.filter(function (user) { return user.id === item.picId; })[0];
   result.pelaporRole = owner ? owner.role : null;
   result.picRole = pic ? pic.role : null;
+  result.fotoUrls = (item.fotoIds || []).map(photoUrlFromId);
+  delete result.fotoIds;
   delete result.row;
   return result;
 }
@@ -240,7 +244,7 @@ function findReport(id, user) {
 }
 function checkVersion(item, body) { if (Number(body.version) !== item.version) fail('Laporan sudah diperbarui pengguna lain. Muat ulang data lalu ulangi perubahan.', 409); }
 function writeReport(item) {
-  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoUrls || [])];
+  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status, item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoIds || [])];
   dataSheet().getRange(item.row, 1, 1, HEADERS.length).setValues([safeRow(values)]);
 }
 function history(id) {
@@ -248,7 +252,8 @@ function history(id) {
     var rawDetail = clean(row[7]);
     var parsedDetail = {};
     try { parsedDetail = JSON.parse(rawDetail) || {}; } catch (error) { parsedDetail = {}; }
-    return { id: String(row[0]), tanggal: timestamp(row[2]), nama: clean(row[4]), aksi: clean(row[5]), catatan: clean(row[6]), detail: rawDetail, fotoUrls: Array.isArray(parsedDetail.fotoUrls) ? parsedDetail.fotoUrls : [] };
+    var fotoIds = Array.isArray(parsedDetail.fotoIds) ? parsedDetail.fotoIds : [];
+    return { id: String(row[0]), tanggal: timestamp(row[2]), nama: clean(row[4]), aksi: clean(row[5]), catatan: clean(row[6]), detail: rawDetail, fotoUrls: fotoIds.map(photoUrlFromId) };
   }).reverse();
 }
 function createUser(body, actor, bootstrap) {
@@ -449,7 +454,7 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
-    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoUrls: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
+    var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: body.status, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoIds: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
     if (LEVELS.indexOf(created.status) === -1) fail('Tingkat keparahan tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
@@ -460,7 +465,7 @@ function handle(body) {
   checkVersion(item, body);
   var note = textField(body.catatan, 'Catatan', false, 2000);
   var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat };
-  var followUpPhotoUrls = [];
+  var followUpPhotoIds = [];
   if (action === 'update') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
     item.tanggal = validDate(body.tanggal);
@@ -473,7 +478,7 @@ function handle(body) {
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
     item.status = body.status;
-    if (body.photos) item.fotoUrls = (item.fotoUrls || []).concat(uploadPhotos(body.photos));
+    if (body.photos) item.fotoIds = (item.fotoIds || []).concat(uploadPhotos(body.photos));
   } else if (action === 'delete') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
     item.deletedAt = nowIso();
@@ -497,7 +502,7 @@ function handle(body) {
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     item.selesaiPada = item.statusPenanganan === 'Selesai' ? nowIso() : '';
-    followUpPhotoUrls = uploadPhotos(body.photos);
+    followUpPhotoIds = uploadPhotos(body.photos);
   } else if (action === 'reopen') {
     if (user.role !== 'admin' && item.pelaporId !== user.id) fail('Hanya admin atau pelapor dapat membuka kembali laporan.', 403);
     if (item.statusPenanganan !== 'Selesai' || !note) fail('Laporan harus berstatus Selesai dan alasan pembukaan wajib diisi.');
@@ -507,7 +512,7 @@ function handle(body) {
   item.updatedAt = nowIso();
   item.version += 1;
   writeReport(item);
-  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat }, fotoUrls: followUpPhotoUrls.length ? followUpPhotoUrls : undefined });
+  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat }, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
   return { status: 'success', data: publicReport(item) };
 }
 
