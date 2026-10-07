@@ -206,8 +206,9 @@ function uploadPhotos(photos) {
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     // getUrl() is Drive's viewer PAGE (HTML), not raw image bytes — unusable in <img src>.
-    // This endpoint serves the actual image so the frontend can render it directly.
-    return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1600';
+    // googleusercontent serves the actual image reliably; the thumbnail endpoint often
+    // returns a generic file icon instead of the photo right after upload.
+    return 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w1600';
   });
 }
 function parseFotoUrls(value) {
