@@ -6,7 +6,7 @@ import { PlusCircle, X, CheckCircle2, Lightbulb, AlertTriangle, UserRound, Inbox
 import DataView from './data-view';
 import './theme.css';
 import { useDialogViewport } from './use-dialog-viewport';
-import { mobileDialog, formFooter, dialogHeader, dialogBody, historyNote } from './ui-styles.mjs';
+import { mobileDialog, formFooter, dialogHeader, dialogBody, historyNote, picResponseBubble } from './ui-styles.mjs';
 import LoadingState from './loading-state';
 import InstallApp from './install-app';
 import AccountsPanel from './accounts-panel';
@@ -18,7 +18,7 @@ import AlertBadge from './alert-badge';
 import ImplantBadge from './implant-badge';
 import FormattingToolbar from './formatting-toolbar';
 import GrowingTextarea from './growing-textarea';
-import FormattedText from './formatted-text';
+import FormattedText, { InlineText } from './formatted-text';
 import { apiRequest, postJson } from './api-client.mjs';
 import { ROLE_LABELS, handlingStatus, isOverdue } from './workflow.mjs';
 import { loadReadIds, saveReadIds } from './read-tracking.mjs';
@@ -350,7 +350,7 @@ export default function KomplainPage() {
   </Dialog.Content></Dialog.Portal></Dialog.Root>
   <Dialog.Root open={assignedNotice.length > 0 && criticalNotice.length === 0 && modal === null} onOpenChange={(open) => { if (!open) setAssignedNotice([]); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-lg`}>
     <div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Laporan Anda sudah ditangani</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">Penanggung jawab (PIC) baru ditentukan untuk {assignedNotice.length > 1 ? `${assignedNotice.length} laporan Anda` : 'laporan Anda'}.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
-    <div className={`${dialogBody} space-y-3 pt-4`}>{assignedNotice.map((item) => <button key={item.id} type="button" onClick={() => { setAssignedNotice([]); setTab('table'); setPendingDetailId(item.id); }} className="w-full rounded-xl border border-violet-900/50 bg-violet-950/20 p-3 text-left transition hover:bg-violet-950/40"><p className="flex items-center gap-1.5 text-sm font-semibold"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-violet-300" />{item.dokter} · {item.tindakan}</p><p className="mt-1 break-words text-sm text-slate-300">Ditangani oleh <strong>{item.picNama}</strong>{item.tenggat ? ` · Tenggat ${formatDate(item.tenggat)}` : ''}</p>{item.jalanKeluar && <p className="mt-1 break-words text-xs text-emerald-300"><span className="font-semibold">Respons PIC:</span> {item.jalanKeluar}</p>}<span className="mt-2 inline-block text-xs font-semibold text-blue-300">Lihat detail laporan →</span></button>)}
+    <div className={`${dialogBody} space-y-3 pt-4`}>{assignedNotice.map((item) => <button key={item.id} type="button" onClick={() => { setAssignedNotice([]); setTab('table'); setPendingDetailId(item.id); }} className="w-full rounded-xl border border-violet-900/50 bg-violet-950/20 p-3 text-left transition hover:bg-violet-950/40"><p className="flex items-center gap-1.5 text-sm font-semibold"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-violet-300" />{item.dokter} · {item.tindakan}</p><p className="mt-1 break-words text-sm text-slate-300">Ditangani oleh <strong>{item.picNama}</strong>{item.tenggat ? ` · Tenggat ${formatDate(item.tenggat)}` : ''}</p>{item.jalanKeluar && <p className={`mt-1 break-words text-xs ${picResponseBubble}`}><span className="font-semibold">Respons PIC:</span> <InlineText text={item.jalanKeluar} /></p>}<span className="mt-2 inline-block text-xs font-semibold text-blue-300">Lihat detail laporan →</span></button>)}
       <div className={formFooter}><Dialog.Close className={`${buttonClass} w-full bg-slate-800`}>Tutup</Dialog.Close></div>
     </div>
   </Dialog.Content></Dialog.Portal></Dialog.Root>

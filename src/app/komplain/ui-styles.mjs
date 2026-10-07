@@ -5,3 +5,5 @@ export const dialogHeader = 'relative shrink-0 border-b border-slate-800 bg-slat
 export const dialogBody = 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1rem,env(safe-area-inset-bottom))] touch-pan-y [-webkit-overflow-scrolling:touch] sm:px-6';
 
 export const historyNote = 'whitespace-pre-wrap break-words rounded-lg border-l-4 border-amber-400 bg-amber-500/15 p-2.5 text-sm leading-6 text-amber-50';
+
+export const picResponseBubble = 'rounded-lg border-l-4 border-emerald-400 bg-emerald-500/15 px-2.5 py-1.5 text-emerald-100';

@@ -12,6 +12,11 @@ function renderInline(text) {
   return parseInline(text).map((seg, index) => <Segment key={index} seg={seg} />);
 }
 
+// For truncated one-line previews (table rows, cards) where block/list layout would break line-clamp.
+export function InlineText({ text }) {
+  return renderInline(String(text ?? ''));
+}
+
 export default function FormattedText({ text, className = '' }) {
   const raw = String(text ?? '');
   if (!raw.trim()) return null;
