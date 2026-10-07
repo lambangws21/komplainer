@@ -33,7 +33,7 @@ export function createFixture({ legacyRows = [] } = {}) {
   const driveFiles = [];
   const driveFolders = new Map([['test-drive-folder', {
     createFile: (blob) => {
-      const file = { id: randomUUID(), blob, sharing: null, getUrl() { return `https://drive.example.test/file/${file.id}`; }, setSharing(access, permission) { file.sharing = { access, permission }; return file; } };
+      const file = { id: randomUUID(), blob, sharing: null, getId() { return file.id; }, getUrl() { return `https://drive.example.test/file/${file.id}`; }, setSharing(access, permission) { file.sharing = { access, permission }; return file; } };
       driveFiles.push(file);
       return file;
     },
