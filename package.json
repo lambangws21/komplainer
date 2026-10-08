@@ -11,7 +11,9 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "node --test tests/*.test.mjs src/app/komplain/weekly-summary.test.mjs src/app/komplain/export.test.mjs",
-    "setup:admin": "node scripts/setup-admin.mjs"
+    "setup:admin": "node scripts/setup-admin.mjs",
+    "test:api": "node tests/api-integration.mjs",
+    "test:ui:local": "node tests/ui-audit-server.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.0",

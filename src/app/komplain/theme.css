@@ -104,3 +104,14 @@ main.komplain-theme {
 @media (prefers-reduced-motion: reduce) {
   .komplain-theme :is(button, a, input, select, textarea) { transition: none; }
 }
+
+/* Keep touch targets and form text usable even with a small browser default font. */
+@media (max-width: 767px) {
+  .komplain-theme button,
+  .komplain-theme [role='menuitem'],
+  .komplain-theme summary { min-height: 44px; }
+  .komplain-theme input:not([type='radio']):not([type='checkbox']),
+  .komplain-theme select,
+  .komplain-theme textarea { font-size: 16px; }
+  .komplain-theme .text-xs { font-size: 12px; }
+}

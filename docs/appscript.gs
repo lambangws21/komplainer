@@ -497,6 +497,8 @@ function handle(body) {
   checkVersion(item, body);
   var note = textField(body.catatan, 'Catatan', false, 2000);
   var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, picNama: item.picNama, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase };
+  var contentKeys = ['tanggal', 'dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'penangananSelanjutnya'];
+  contentKeys.forEach(function (key) { before[key] = item[key] || ''; });
   var followUpPhotoIds = [];
   var updatedFields = [];
   if (action === 'update') {
@@ -563,7 +565,9 @@ function handle(body) {
   item.updatedAt = nowIso();
   item.version += 1;
   writeReport(item);
-  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, picNama: item.picNama, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase }, fields: updatedFields.length ? updatedFields : undefined, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
+  var after = { statusPenanganan: item.statusPenanganan, picId: item.picId, picNama: item.picNama, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase };
+  contentKeys.forEach(function (key) { after[key] = item[key] || ''; });
+  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: after, fields: updatedFields.length ? updatedFields : undefined, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
   return { status: 'success', data: publicReport(item) };
 }
 

@@ -13,6 +13,7 @@ const eslintConfig = [
   { ignores: [".next/**", ".next-dev/**", ".vercel/**", "out/**", "build/**", "coverage/**", "next-env.d.ts"] },
   { files: ["**/*.{js,jsx,ts,tsx}"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  { files: ["src/app/komplain/**/*.jsx"], rules: { "no-undef": "error" } },
 ];
 
 export default eslintConfig;

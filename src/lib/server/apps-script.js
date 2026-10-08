@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { tokenHash, SESSION_SECONDS } from './password.mjs';
 import { ApiError } from './api-error.mjs';
+import { isSameOrigin } from './request-origin.mjs';
 import { usesFirebase, requireFirebaseSession } from './firebase-auth';
 import { firebaseProfile, firebaseDirectory } from './firebase-accounts';
 export { ApiError } from './api-error.mjs';
@@ -62,8 +63,7 @@ export async function readBody(request) {
   } catch { throw new ApiError('Data permintaan tidak valid.'); }
 }
 export function assertSameOrigin(request) {
-  const origin = request.headers.get('origin');
-  if (!origin || origin !== new URL(request.url).origin || request.headers.get('sec-fetch-site') === 'cross-site') throw new ApiError('Permintaan harus berasal dari aplikasi ini.', 403);
+  if (!isSameOrigin(request)) throw new ApiError('Permintaan harus berasal dari aplikasi ini.', 403);
 }
 export async function setSession(token) {
   (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: SESSION_SECONDS });

@@ -21,7 +21,7 @@ export async function POST(request) {
     assertUsernameAvailable(accounts, username, identity.uid);
     const auth = firebaseAuth();
     await auth.updateUser(identity.uid, { email, displayName: nama });
-    await writeFirebaseMetadata(identity.uid, { role: user.role, unit: user.unit, active: user.active, approval: user.approval, mustChangePassword: user.mustChangePassword, username });
+    await writeFirebaseMetadata(identity.uid, { role: user.role, unit: user.unit, active: user.approval === 'approved' ? user.active : true, approval: user.approval, mustChangePassword: user.mustChangePassword, username });
     await auth.revokeRefreshTokens(identity.uid);
     await clearFirebaseSession();
     return json({ status: 'success', message: 'Profil diperbarui. Silakan masuk kembali.' });

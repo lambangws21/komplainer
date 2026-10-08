@@ -1,18 +1,19 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ChevronLeft, ChevronRight, ExternalLink, X } from 'lucide-react';
 import { displaySrc } from './photo-url.mjs';
 
 export default function PhotoGallery({ urls = [], label = 'Foto', thumbClassName = 'h-20 w-20' }) {
   const [index, setIndex] = useState(null);
+  const returnFocus = useRef(null);
   if (!urls.length) return null;
   const open = index !== null;
   const go = (delta) => setIndex((current) => (current + delta + urls.length) % urls.length);
   return <>
-    <div className="flex flex-wrap gap-2">{urls.map((url, i) => <button key={url} type="button" onClick={() => setIndex(i)} aria-label={`Lihat ${label.toLowerCase()} ${i + 1}`} className={`block ${thumbClassName} shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800 transition hover:ring-2 hover:ring-blue-400`}><img src={displaySrc(url)} alt={`${label} ${i + 1}`} loading="lazy" className="h-full w-full object-cover" /></button>)}</div>
+    <div className="flex flex-wrap gap-2">{urls.map((url, i) => <button key={url} type="button" onClick={(event) => { returnFocus.current = event.currentTarget; setIndex(i); }} aria-label={`Lihat ${label.toLowerCase()} ${i + 1}`} className={`block ${thumbClassName} shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800 transition hover:ring-2 hover:ring-blue-400`}><img src={displaySrc(url)} alt={`${label} ${i + 1}`} loading="lazy" className="h-full w-full object-cover" /></button>)}</div>
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) setIndex(null); }}>
-      <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[90] bg-black/90" /><Dialog.Content onOpenAutoFocus={(event) => event.preventDefault()} className="fixed left-1/2 top-1/2 z-[91] flex max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 outline-none">
+      <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[90] bg-black/90" /><Dialog.Content onCloseAutoFocus={(event) => { if (returnFocus.current?.isConnected) { event.preventDefault(); returnFocus.current.focus(); } }} className="fixed left-1/2 top-1/2 z-[91] flex max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 outline-none">
         <Dialog.Title className="sr-only">{label}</Dialog.Title>
         <Dialog.Description className="sr-only">Pratinjau {label.toLowerCase()} {open ? index + 1 : ''} dari {urls.length}</Dialog.Description>
         {open && <img src={displaySrc(urls[index])} alt={`${label} ${index + 1}`} className="max-h-[75dvh] w-auto max-w-full rounded-xl object-contain" />}

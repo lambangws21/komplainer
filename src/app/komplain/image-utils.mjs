@@ -15,9 +15,10 @@ function loadDrawable(file) {
   if (typeof createImageBitmap === 'function') return createImageBitmap(file);
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Gagal membaca gambar.'));
-    img.src = URL.createObjectURL(file);
+    const url = URL.createObjectURL(file);
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Gagal membaca gambar.')); };
+    img.src = url;
   });
 }
 
@@ -46,7 +47,10 @@ export async function compressImage(file) {
   const canvas = document.createElement('canvas');
   canvas.width = targetWidth; canvas.height = targetHeight;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+  try {
+    if (!ctx) throw new Error('Perangkat tidak dapat memproses foto.');
+    ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+  } finally { source.close?.(); }
   const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('Gagal memproses foto.'))), 'image/jpeg', JPEG_QUALITY));
   const base64 = await blobToBase64(blob);
   return { base64, mimeType: 'image/jpeg', filename: renameToJpeg(file.name), size: blob.size, previewUrl: URL.createObjectURL(blob) };

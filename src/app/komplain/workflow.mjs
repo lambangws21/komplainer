@@ -16,7 +16,7 @@ export function daysSince(isoDate) {
   return Number.isNaN(parsed) ? null : Math.floor((Date.now() - parsed) / 86400000);
 }
 // Which editable fields an "update" audit entry actually changed, as readable labels.
-const CONTENT_FIELD_LABELS = { tanggal: 'Tanggal', dokter: 'Dokter', rumahSakit: 'Rumah Sakit', team: 'Team', tindakan: 'Tindakan', komplain: 'Masalah', jalanKeluar: 'Solusi', penangananSelanjutnya: 'RTL' };
+const CONTENT_FIELD_LABELS = { tanggal: 'Tanggal', dokter: 'Dokter', rumahSakit: 'Rumah Sakit', team: 'Team Pelapor', tindakan: 'Tindakan', komplain: 'Masalah', jalanKeluar: 'Penyelesaian tindak lanjut', penangananSelanjutnya: 'RTL' };
 export function editedFieldLabels(detailJson) {
   try {
     const detail = JSON.parse(detailJson || '{}');
@@ -25,7 +25,7 @@ export function editedFieldLabels(detailJson) {
 }
 // Pulls whichever tracked before/after values changed out of a history entry's raw detail
 // JSON (PIC, tenggat, severity, status case, workflow status) — whatever the action touched.
-const TRACKED_KEYS = ['statusPenanganan', 'picNama', 'tenggat', 'status', 'statusCase'];
+const TRACKED_KEYS = ['statusPenanganan', 'picNama', 'tenggat', 'status', 'statusCase', ...Object.keys(CONTENT_FIELD_LABELS)];
 export function historyChanges(detailJson) {
   try {
     const detail = JSON.parse(detailJson || '{}');
@@ -36,15 +36,15 @@ export function historyChanges(detailJson) {
 const CHANGE_LABELS = { statusPenanganan: 'Status', picNama: 'PIC', tenggat: 'Tenggat', status: 'Tingkat keparahan', statusCase: 'Status Case' };
 // Formats one historyChanges() entry into readable text; needs the caller's LEVELS list and
 // formatDate so this file stays free of UI concerns.
+export const historyFieldLabel = (key) => CHANGE_LABELS[key] || CONTENT_FIELD_LABELS[key] || key;
+export function formatHistoryValue(key, value, levelsList, formatDateFn) {
+  if (key === 'status') return levelsList.find((level) => level.code === value)?.label || value || 'Belum ditentukan';
+  if (key === 'picNama') return value || 'Belum ditugaskan';
+  if (key === 'tenggat' || key === 'tanggal') return value ? formatDateFn(value) : 'Belum ditentukan';
+  return value || 'Belum diisi';
+}
 export function formatHistoryChange(change, levelsList, formatDateFn) {
-  const format = (value) => {
-    if (change.key === 'status') return levelsList.find((level) => level.code === value)?.label || 'Belum ditentukan';
-    if (change.key === 'picNama') return value || 'Belum ditugaskan';
-    if (change.key === 'tenggat') return value ? formatDateFn(value) : 'Belum ditentukan';
-    if (change.key === 'statusCase') return value || '-';
-    return value;
-  };
-  return `${CHANGE_LABELS[change.key]}: ${format(change.before)} → ${format(change.after)}`;
+  return `${historyFieldLabel(change.key)}: ${formatHistoryValue(change.key, change.before, levelsList, formatDateFn)} → ${formatHistoryValue(change.key, change.after, levelsList, formatDateFn)}`;
 }
 // Lets a card's color say at a glance whether a case has been picked up yet.
 export function workflowCardStyle(item, today) {

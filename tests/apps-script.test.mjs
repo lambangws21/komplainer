@@ -80,7 +80,7 @@ test('promoting a legacy pelapor-PIC to petugas does not require transferring th
   const f = createFixture();
   const legacyDelegate = f.addUser('legacy-delegate@example.test');
   const owner = f.addUser('legacy-owner@example.test');
-  const item = f.createReport(owner).data;
+  f.createReport(owner);
   // Simulate pre-existing data from before delegation was restricted to petugas accounts.
   f.data.data[1][8] = 'Diproses';
   f.data.data[1][9] = legacyDelegate.user.id;
@@ -437,6 +437,9 @@ test('audit history records which fields changed on edit, and PIC name alongside
   let detail = f.request({ action: 'detail', ...reporter, id: item.id });
   let editEntry = detail.history.find((entry) => entry.aksi === 'Laporan diedit');
   assert.deepEqual(JSON.parse(editEntry.detail).fields, ['dokter']);
+  assert.equal(JSON.parse(editEntry.detail).before.dokter, 'Dokter Awal');
+  assert.equal(JSON.parse(editEntry.detail).after.dokter, 'Dokter Baru');
+  assert.equal(JSON.parse(editEntry.detail).after.tindakan, 'Tindakan Awal');
 
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
   detail = f.request({ action: 'detail', ...pic, id: item.id });

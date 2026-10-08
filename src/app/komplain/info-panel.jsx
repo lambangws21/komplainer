@@ -5,6 +5,8 @@ import { Info, X, Share2, Check, ClipboardList, UserRound, Workflow, BarChart3, 
 import { mobileDialog, dialogHeader, dialogBody } from './ui-styles.mjs';
 
 const FUNGSI = [
+  { icon: Package, color: 'text-orange-300 bg-orange-500/15', text: 'Identifikasi implant terkait berdasarkan informasi dalam laporan' },
+  { icon: Users, color: 'text-pink-300 bg-pink-500/15', text: 'Pendaftaran Pelapor dengan persetujuan Admin sebelum dapat mengakses laporan' },
   { icon: ClipboardList, color: 'text-blue-300 bg-blue-500/15', text: 'Catat & kelola laporan komplain lapangan — buat, edit, dan arsipkan laporan milik sendiri' },
   { icon: UserRound, color: 'text-violet-300 bg-violet-500/15', text: 'Tentukan PIC, pantau tenggat, dan catat tindak lanjut hingga laporan selesai' },
   { icon: Workflow, color: 'text-amber-300 bg-amber-500/15', text: 'Alur status: Baru → Diproses/Menunggu → Selesai, dengan opsi buka kembali' },
@@ -13,11 +15,11 @@ const FUNGSI = [
   { icon: Users, color: 'text-pink-300 bg-pink-500/15', text: 'Peran berbeda — Admin, Petugas/PIC, dan Pelapor — dengan akses yang disesuaikan' },
   { icon: Eye, color: 'text-sky-300 bg-sky-500/15', text: 'Semua pengguna bisa melihat status laporan lain (tanpa isi) untuk transparansi' },
   { icon: KeyRound, color: 'text-indigo-300 bg-indigo-500/15', text: 'Login dengan email atau username, kelola profil & password sendiri' },
-  { icon: Smartphone, color: 'text-teal-300 bg-teal-500/15', text: 'Bisa di-install sebagai aplikasi (PWA) dan tetap bisa dibuka saat offline' },
+  { icon: Smartphone, color: 'text-teal-300 bg-teal-500/15', text: 'Pasang sebagai aplikasi (PWA); internet diperlukan untuk memuat dan menyimpan laporan' },
 ];
 const RENCANA = [
   { icon: Mail, color: 'text-amber-300 bg-amber-500/15', text: 'Notifikasi email otomatis ke PIC & admin saat ada laporan kritis (C1/C2) yang belum ditangani' },
-  { icon: Package, color: 'text-orange-300 bg-orange-500/15', text: 'Pencatatan produk/implant yang terlibat dalam laporan' },
+
 ];
 const SHARE_TEXT = `Komplainer — Aplikasi pelaporan & tindak lanjut komplain lapangan.\n\nFitur saat ini:\n${FUNGSI.map((item) => `• ${item.text}`).join('\n')}\n\nRencana ke depan:\n${RENCANA.map((item) => `• ${item.text}`).join('\n')}`;
 
