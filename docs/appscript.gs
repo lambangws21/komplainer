@@ -496,10 +496,13 @@ function handle(body) {
   var item = findReport(body.id, user);
   checkVersion(item, body);
   var note = textField(body.catatan, 'Catatan', false, 2000);
-  var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase };
+  var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, picNama: item.picNama, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase };
   var followUpPhotoIds = [];
+  var updatedFields = [];
   if (action === 'update') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
+    // Snapshot the editable content before mutating, so the audit log can say which fields changed.
+    var beforeContent = { tanggal: item.tanggal, dokter: item.dokter, rumahSakit: item.rumahSakit, team: item.team, tindakan: item.tindakan, komplain: item.komplain, jalanKeluar: item.jalanKeluar, penangananSelanjutnya: item.penangananSelanjutnya };
     item.tanggal = validDate(body.tanggal);
     item.dokter = textField(body.dokter, 'Dokter', true);
     if (body.rumahSakit !== undefined) item.rumahSakit = textField(body.rumahSakit, 'Rumah Sakit', false);
@@ -516,6 +519,7 @@ function handle(body) {
       item.status = body.status;
     }
     if (body.photos) item.fotoIds = (item.fotoIds || []).concat(uploadPhotosWithCap(body.photos, item));
+    updatedFields = Object.keys(beforeContent).filter(function (key) { return beforeContent[key] !== item[key]; });
   } else if (action === 'delete') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
     item.deletedAt = nowIso();
@@ -559,7 +563,7 @@ function handle(body) {
   item.updatedAt = nowIso();
   item.version += 1;
   writeReport(item);
-  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase }, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
+  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, picNama: item.picNama, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase }, fields: updatedFields.length ? updatedFields : undefined, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
   return { status: 'success', data: publicReport(item) };
 }
 

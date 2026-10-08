@@ -428,6 +428,23 @@ test('throttle supports a custom limit/window/bucket independent of the default 
   // Same name, default 'login' bucket — unaffected by the 'report' bucket above.
   f.context.throttle('user-x', 10, 900);
 });
+test('audit history records which fields changed on edit, and PIC name alongside PIC id on assign', () => {
+  const f = createFixture();
+  const reporter = f.addUser('audit-fields@example.test');
+  const pic = f.addUser('audit-fields-pic@example.test', 'petugas');
+  let item = f.createReport(reporter, { dokter: 'Dokter Awal', tindakan: 'Tindakan Awal' }).data;
+  item = f.request({ action: 'update', ...reporter, ...item, dokter: 'Dokter Baru', tindakan: 'Tindakan Awal' }).data;
+  let detail = f.request({ action: 'detail', ...reporter, id: item.id });
+  let editEntry = detail.history.find((entry) => entry.aksi === 'Laporan diedit');
+  assert.deepEqual(JSON.parse(editEntry.detail).fields, ['dokter']);
+
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
+  detail = f.request({ action: 'detail', ...pic, id: item.id });
+  const assignEntry = detail.history.find((entry) => entry.aksi === 'PIC / tenggat diperbarui');
+  const parsed = JSON.parse(assignEntry.detail);
+  assert.equal(parsed.before.picNama, '');
+  assert.equal(parsed.after.picNama, pic.user.nama);
+});
 test('report creation is rate-limited per user', () => {
   const f = createFixture();
   const reporter = f.addUser('rate-limited@example.test');
