@@ -155,7 +155,7 @@ test('authenticated requests create missing sheets and extend legacy summary hea
   f.ss.getSheets().splice(f.ss.getSheets().findIndex((sheet) => sheet.name === 'Riwayat'), 1);
   assert.equal(f.request({ action: 'session', ...f.adminSession }).status, 'success');
   assert.ok(f.ss.getSheetByName('Riwayat'));
-  assert.equal(summary.data[0].length, 12);
+  assert.equal(summary.data[0].length, 14);
   assert.deepEqual(summary.data[1], old);
   f.properties.set('COMPLAINT_SHEET_NAME', 'Komplain Baru');
   f.context.ensureSchema();
@@ -382,4 +382,55 @@ test('reporter classifies outcome as Sukses/Ada Kendala; severity starts blank a
   assert.equal(item.status, 'C2 - Major');
   item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Ditinjau', status: 'C1 - Critical' }).data;
   assert.equal(item.status, 'C1 - Critical');
+});
+test("a report's total photos across create and every follow-up are capped at MAX_PHOTOS_TOTAL", () => {
+  const f = createFixture();
+  const reporter = f.addUser('photo-cap@example.test');
+  const pic = f.addUser('photo-cap-pic@example.test', 'petugas');
+  const photos = (n, prefix) => Array.from({ length: n }, (_, index) => ({ base64: Buffer.from(`${prefix}${index}`).toString('base64'), mimeType: 'image/jpeg', filename: `${prefix}${index}.jpg` }));
+  let item = f.createReport(reporter, { photos: photos(5, 'a') }).data;
+  assert.equal(item.fotoUrls.length, 5);
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 1', photos: photos(5, 'b') }).data;
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 2', photos: photos(5, 'c') }).data;
+  const detail = f.request({ action: 'detail', ...pic, id: item.id });
+  const historyTotal = detail.history.reduce((sum, entry) => sum + (entry.fotoUrls?.length || 0), 0);
+  assert.equal(item.fotoUrls.length + historyTotal, 15);
+  const overCap = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 3', photos: photos(1, 'd') });
+  assert.equal(overCap.code, 400);
+  assert.match(overCap.message, /batas maksimal/);
+});
+test('audit history records severity and status case before/after values', () => {
+  const f = createFixture();
+  const reporter = f.addUser('audit-trail@example.test');
+  const pic = f.addUser('audit-trail-pic@example.test', 'petugas');
+  let item = f.createReport(reporter, { statusCase: 'Ada Kendala' }).data;
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id, status: 'C2 - Major' }).data;
+  const detail = f.request({ action: 'detail', ...pic, id: item.id });
+  const assignEntry = detail.history.find((entry) => entry.aksi === 'PIC / tenggat diperbarui');
+  const parsed = JSON.parse(assignEntry.detail);
+  assert.equal(parsed.before.status, '');
+  assert.equal(parsed.after.status, 'C2 - Major');
+  assert.equal(parsed.before.statusCase, 'Ada Kendala');
+  assert.equal(parsed.after.statusCase, 'Ada Kendala');
+});
+test('weekly summary tracks Status Case counts alongside severity and workflow counts', () => {
+  const f = createFixture();
+  f.context.generateWeeklySummary();
+  const summary = f.ss.getSheetByName('Rekapan Mingguan');
+  assert.deepEqual(summary.data[0].slice(-2), ['Sukses', 'Ada Kendala']);
+  assert.equal(summary.data[1].length, summary.data[0].length);
+});
+test('throttle supports a custom limit/window/bucket independent of the default login bucket', () => {
+  const f = createFixture();
+  for (let i = 0; i < 3; i++) f.context.throttle('user-x', 3, 60, 'report');
+  assert.throws(() => f.context.throttle('user-x', 3, 60, 'report'), /Terlalu banyak percobaan/);
+  // Same name, default 'login' bucket — unaffected by the 'report' bucket above.
+  f.context.throttle('user-x', 10, 900);
+});
+test('report creation is rate-limited per user', () => {
+  const f = createFixture();
+  const reporter = f.addUser('rate-limited@example.test');
+  for (let i = 0; i < 30; i++) assert.equal(f.createReport(reporter).status, 'success');
+  assert.equal(f.createReport(reporter).code, 429);
 });

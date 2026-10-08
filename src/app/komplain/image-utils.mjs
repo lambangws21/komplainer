@@ -1,4 +1,7 @@
 export const MAX_PHOTOS = 5;
+// Keep in sync with MAX_PHOTOS_TOTAL in docs/appscript.gs — the report-wide cap across create
+// plus every follow-up, not just this one submission.
+export const MAX_PHOTOS_TOTAL = 15;
 const MAX_DIMENSION = 1280;
 const JPEG_QUALITY = 0.7;
 

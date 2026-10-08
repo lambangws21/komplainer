@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --test tests/*.test.mjs src/app/komplain/weekly-summary.test.mjs",
+    "test": "node --test tests/*.test.mjs src/app/komplain/weekly-summary.test.mjs src/app/komplain/export.test.mjs",
     "setup:admin": "node scripts/setup-admin.mjs"
   },
   "dependencies": {

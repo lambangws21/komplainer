@@ -1,14 +1,19 @@
 'use client';
 import { useRef, useState } from 'react';
 import { ImagePlus, Loader2, X } from 'lucide-react';
-import { compressImage, MAX_PHOTOS } from './image-utils.mjs';
+import { compressImage, MAX_PHOTOS, MAX_PHOTOS_TOTAL } from './image-utils.mjs';
 import { displaySrc } from './photo-url.mjs';
 
-export default function PhotoPicker({ photos, onAdd, onRemove, existingUrls = [], disabled = false }) {
+// totalExisting is the report's full lifetime photo count (create + every follow-up so far),
+// which can be larger than existingUrls.length — follow-up photos aren't shown as thumbnails
+// here (they live under their own history entry) but still count against the report-wide cap.
+export default function PhotoPicker({ photos, onAdd, onRemove, existingUrls = [], totalExisting = existingUrls.length, disabled = false }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const remainingSlots = MAX_PHOTOS - photos.length - existingUrls.length;
+  const perSubmitSlots = MAX_PHOTOS - photos.length;
+  const totalSlots = MAX_PHOTOS_TOTAL - totalExisting - photos.length;
+  const remainingSlots = Math.min(perSubmitSlots, totalSlots);
 
   async function handleFiles(event) {
     const files = Array.from(event.target.files || []);
@@ -16,7 +21,7 @@ export default function PhotoPicker({ photos, onAdd, onRemove, existingUrls = []
     if (!files.length) return;
     setError('');
     const allowed = files.slice(0, Math.max(0, remainingSlots));
-    if (files.length > allowed.length) setError(`Maksimal ${MAX_PHOTOS} foto per laporan.`);
+    if (files.length > allowed.length) setError(totalSlots < perSubmitSlots ? `Laporan ini sudah mencapai batas maksimal ${MAX_PHOTOS_TOTAL} foto.` : `Maksimal ${MAX_PHOTOS} foto sekaligus.`);
     setBusy(true);
     try {
       for (const file of allowed) {
@@ -35,6 +40,6 @@ export default function PhotoPicker({ photos, onAdd, onRemove, existingUrls = []
     </div>
     <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple onChange={handleFiles} className="hidden" />
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
-    <p className="text-xs text-slate-500">Ambil foto langsung atau pilih dari galeri. Maksimal {MAX_PHOTOS} foto, otomatis dikompres sebelum dikirim.</p>
+    <p className="text-xs text-slate-500">Ambil foto langsung atau pilih dari galeri. Maksimal {MAX_PHOTOS} foto sekaligus, otomatis dikompres sebelum dikirim.{totalExisting > 0 && ` Laporan ini sudah punya ${totalExisting} dari ${MAX_PHOTOS_TOTAL} foto maksimal.`}</p>
   </div>;
 }

@@ -17,8 +17,15 @@ var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 
 // Photos are uploaded to this Drive folder. Prefer setting DRIVE_FOLDER_ID in Script Properties
 // (no redeploy needed to change it); this constant is only a fallback if that property is unset.
 var DRIVE_FOLDER_ID = '1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
-var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+// Sized so MAX_PHOTOS_PER_SUBMIT photos at this size still fit base64-encoded (×4/3) inside
+// readBody's request-size ceiling in src/lib/server/apps-script.js, with headroom for the rest
+// of the JSON payload. The app's own client-side compression (1280px, JPEG q0.7) outputs well
+// under this in practice.
+var MAX_PHOTO_BYTES = 500 * 1024;
 var MAX_PHOTOS_PER_SUBMIT = 5;
+// Total photos a single report may accumulate across its whole lifetime (initial submission
+// plus every follow-up), not just per request — see totalPhotoCount().
+var MAX_PHOTOS_TOTAL = 15;
 var PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 var USER_HEADERS = ['ID', 'Nama', 'Email', 'Role', 'Unit', 'Password Hash', 'Aktif', 'Dibuat Pada', 'Wajib Ganti Password'];
 var SESSION_HEADERS = ['Token Hash', 'User ID', 'Expires At'];
@@ -27,7 +34,7 @@ var LEVELS = ['C1 - Critical', 'C2 - Major', 'C3 - Moderate', 'C4 - Minor'];
 var STATUS_CASE = ['Sukses', 'Ada Kendala'];
 var WORKFLOW = ['Baru', 'Diproses', 'Menunggu', 'Selesai'];
 var ROLES = ['pelapor', 'petugas', 'admin'];
-var SUMMARY_HEADERS = ['Tanggal Rekapan', 'Total Kasus Minggu Ini'].concat(LEVELS, ['Awal Minggu', 'Akhir Minggu', 'Baru', 'Diproses', 'Menunggu', 'Selesai']);
+var SUMMARY_HEADERS = ['Tanggal Rekapan', 'Total Kasus Minggu Ini'].concat(LEVELS, ['Awal Minggu', 'Akhir Minggu', 'Baru', 'Diproses', 'Menunggu', 'Selesai'], STATUS_CASE);
 // One-time initial password hash; never reset an existing account during setup.
 var INITIAL_ADMIN_HASH = 'scrypt:79ba41d40b7579ebcb1b33e905843ef8:aa25c5c093dfb3f1cd5cfe81cd1873f0030b2fabb3b2f88d5e2560125d465b5f85036be6327c2b3cfd7227f09bc45fba12f23d875a704da6986f44d272fab6d0';
 
@@ -165,12 +172,13 @@ function allUsers() {
 }
 function publicUser(user) { return { id: user.id, nama: user.nama, email: user.email, role: user.role, unit: user.unit, active: user.active, mustChangePassword: user.mustChangePassword, firebaseUid: String(user.passwordHash || '').indexOf('firebase:') === 0 ? user.passwordHash.slice(9) : null }; }
 function requireAdmin(user) { if (user.role !== 'admin') fail('Hanya admin dapat melakukan tindakan ini.', 403); }
-function throttle(name) {
+function throttle(name, limit, windowSeconds, bucket) {
+  limit = limit || 10; windowSeconds = windowSeconds || 900; bucket = bucket || 'login';
   var key = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, name));
   var cache = CacheService.getScriptCache();
-  var attempts = Number(cache.get('login:' + key) || 0);
-  if (attempts >= 10) fail('Terlalu banyak percobaan. Tunggu 15 menit sebelum mencoba lagi.', 429);
-  cache.put('login:' + key, String(attempts + 1), 900);
+  var attempts = Number(cache.get(bucket + ':' + key) || 0);
+  if (attempts >= limit) fail('Terlalu banyak percobaan. Tunggu beberapa menit sebelum mencoba lagi.', 429);
+  cache.put(bucket + ':' + key, String(attempts + 1), windowSeconds);
 }
 function sessionUser(hash) {
   if (!/^[a-f0-9]{64}$/.test(String(hash))) fail('Silakan masuk untuk melanjutkan.', 401);
@@ -216,6 +224,22 @@ function uploadPhotos(photos) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return file.getId();
   });
+}
+// Follow-up photos are never merged into item.fotoIds (they stay scoped to their history
+// entry — see history()), so the report's true lifetime total has to add both together.
+function totalPhotoCount(item) {
+  var historyCount = rows(systemSheet('Riwayat', HISTORY_HEADERS), HISTORY_HEADERS.length)
+    .filter(function (row) { return String(row[1]) === item.id; })
+    .reduce(function (sum, row) {
+      try { var detail = JSON.parse(clean(row[7]) || '{}'); return sum + (Array.isArray(detail.fotoIds) ? detail.fotoIds.length : 0); }
+      catch (error) { return sum; }
+    }, 0);
+  return (item.fotoIds || []).length + historyCount;
+}
+function uploadPhotosWithCap(photos, item) {
+  var incoming = Array.isArray(photos) ? photos.length : 0;
+  if (incoming && totalPhotoCount(item) + incoming > MAX_PHOTOS_TOTAL) fail('Total foto pada laporan ini sudah mencapai batas maksimal (' + MAX_PHOTOS_TOTAL + ' foto). Hapus foto yang tidak diperlukan sebelum menambah lagi.', 400);
+  return uploadPhotos(photos);
 }
 function parseFotoIds(value) {
   if (!value) return [];
@@ -459,10 +483,11 @@ function handle(body) {
       if (existing.pelaporId !== user.id) fail('ID permintaan sudah digunakan.', 409);
       return { status: 'success', data: publicReport(existing), id: id };
     }
+    if (STATUS_CASE.indexOf(body.statusCase) === -1) fail('Status case tidak valid.');
+    throttle('create:' + user.id, 30, 300, 'report');
     // Severity (status) is no longer set by the reporter — it starts blank and is assigned by
     // the PIC during triage/follow-up. The reporter instead classifies the outcome themselves.
     var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: '', statusCase: body.statusCase, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoIds: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
-    if (STATUS_CASE.indexOf(created.statusCase) === -1) fail('Status case tidak valid.');
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
     return { status: 'success', data: publicReport(created), id: id };
@@ -471,7 +496,7 @@ function handle(body) {
   var item = findReport(body.id, user);
   checkVersion(item, body);
   var note = textField(body.catatan, 'Catatan', false, 2000);
-  var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat };
+  var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase };
   var followUpPhotoIds = [];
   if (action === 'update') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
@@ -490,7 +515,7 @@ function handle(body) {
       if (LEVELS.indexOf(body.status) === -1) fail('Tingkat keparahan tidak valid.');
       item.status = body.status;
     }
-    if (body.photos) item.fotoIds = (item.fotoIds || []).concat(uploadPhotos(body.photos));
+    if (body.photos) item.fotoIds = (item.fotoIds || []).concat(uploadPhotosWithCap(body.photos, item));
   } else if (action === 'delete') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
     item.deletedAt = nowIso();
@@ -524,7 +549,7 @@ function handle(body) {
     item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     item.selesaiPada = item.statusPenanganan === 'Selesai' ? nowIso() : '';
-    followUpPhotoIds = uploadPhotos(body.photos);
+    followUpPhotoIds = uploadPhotosWithCap(body.photos, item);
   } else if (action === 'reopen') {
     if (user.role !== 'admin' && item.pelaporId !== user.id) fail('Hanya admin atau pelapor dapat membuka kembali laporan.', 403);
     if (item.statusPenanganan !== 'Selesai' || !note) fail('Laporan harus berstatus Selesai dan alasan pembukaan wajib diisi.');
@@ -534,7 +559,7 @@ function handle(body) {
   item.updatedAt = nowIso();
   item.version += 1;
   writeReport(item);
-  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat }, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
+  audit(item.id, user, { update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], note, { before: before, after: { statusPenanganan: item.statusPenanganan, picId: item.picId, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase }, fotoIds: followUpPhotoIds.length ? followUpPhotoIds : undefined });
   return { status: 'success', data: publicReport(item) };
 }
 
@@ -552,7 +577,7 @@ function generateWeeklySummary() {
     var selected = reports().filter(function (item) { return item.tanggal >= start && item.tanggal <= end; });
     var summaryHeaders = SUMMARY_HEADERS;
     var summary = systemSheet('Rekapan Mingguan', summaryHeaders, 6);
-    var values = [today, selected.length].concat(LEVELS.map(function (level) { return selected.filter(function (item) { return item.status === level; }).length; }), [start, end], WORKFLOW.map(function (status) { return selected.filter(function (item) { return item.statusPenanganan === status; }).length; }));
+    var values = [today, selected.length].concat(LEVELS.map(function (level) { return selected.filter(function (item) { return item.status === level; }).length; }), [start, end], WORKFLOW.map(function (status) { return selected.filter(function (item) { return item.statusPenanganan === status; }).length; }), STATUS_CASE.map(function (statusCase) { return selected.filter(function (item) { return item.statusCase === statusCase; }).length; }));
     var existing = rows(summary, summaryHeaders.length).findIndex(function (row) { return dateText(row[6]) === start; });
     if (existing >= 0) summary.getRange(existing + 2, 1, 1, values.length).setValues([values]);
     else summary.appendRow(values);

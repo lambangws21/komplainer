@@ -10,6 +10,19 @@ export const canEditReport = (item, user) => !!user && (user.role === 'admin' ||
 export const canFollowUp = (item, user) => handlingStatus(item) !== 'Selesai' && (user?.role === 'admin' || (!!user && item.picId === user.id));
 export const canReopen = (item, user) => !!user && handlingStatus(item) === 'Selesai' && (user.role === 'admin' || item.pelaporId === user.id);
 export const isOverdue = (item, today) => !!item.tenggat && item.tenggat < today && handlingStatus(item) !== 'Selesai';
+export function daysSince(isoDate) {
+  if (!isoDate) return null;
+  const parsed = new Date(isoDate).getTime();
+  return Number.isNaN(parsed) ? null : Math.floor((Date.now() - parsed) / 86400000);
+}
+// Pulls the severity before/after out of a history entry's raw detail JSON, if it changed.
+export function severityChange(detailJson) {
+  try {
+    const detail = JSON.parse(detailJson || '{}');
+    if (detail.before?.status !== undefined && detail.after?.status !== undefined && detail.before.status !== detail.after.status) return { before: detail.before.status, after: detail.after.status };
+  } catch { /* malformed or legacy detail JSON — no change to show */ }
+  return null;
+}
 // Lets a card's color say at a glance whether a case has been picked up yet.
 export function workflowCardStyle(item, today) {
   const status = handlingStatus(item);
