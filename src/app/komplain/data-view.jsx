@@ -7,7 +7,7 @@ import PhotoGallery from './photo-gallery';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, CalendarDays, Table2, BarChart3, ArrowDownUp, Download, Lock, AlertCircle, Wrench, ListChecks } from 'lucide-react';
+import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Table2, BarChart3, ArrowDownUp, Download, Lock, AlertCircle, Wrench, ListChecks, SlidersHorizontal } from 'lucide-react';
 import { dateKey, shiftDate, shiftMonth, summarizeWeek, summarizeMonth, weekStart } from './weekly-summary.mjs';
 import { reportsToCsv, recapToCsv, groupRecap, downloadCsv } from './export.mjs';
 import WorkflowBadge from './workflow-badge';
@@ -59,6 +59,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
   const [rangeEnd, setRangeEnd] = useState('');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
+  const [showAllFilters, setShowAllFilters] = useState(false);
   const [pageSize, setPageSize] = useState(5);
   const [detail, setDetail] = useState(null);
   const dialogStyle = useDialogViewport(detail !== null);
@@ -107,6 +108,7 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
     petugas: seen.petugas || (!!item.picId && item.picRole === 'petugas'),
     delegated: seen.delegated || (!!item.picId && item.picRole === 'pelapor'),
   }), { admin: false, pelapor: false, petugas: false, delegated: false }), [list]);
+  const hiddenFilterCount = [level !== 'Semua', implantFilter !== 'Semua', period !== 'all', !!(rangeStart && rangeEnd)].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const rows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -192,14 +194,19 @@ export default function DataView({ list, loaded, loading, loadError, busy, user,
           <label className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="sr-only">Urutkan laporan</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={input}><option value="newest">Baru masuk dahulu</option><option value="oldest">Lama dahulu</option></select></label>
         </div>
 
-        <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Status Case</span><select aria-label="Filter status case" value={statusCaseFilter} onChange={(event) => { setStatusCaseFilter(event.target.value); setPage(1); }} className={input}><option value="Semua">Semua status case</option>{STATUS_CASE.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
-          <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Tingkat keparahan</span><select aria-label="Filter tingkat keparahan" value={level} onChange={(event) => { setLevel(event.target.value); setOnlyMine(false); setPage(1); }} className={input}><option value="Semua">Semua tingkat</option>{['C1', 'C2', 'C3', 'C4'].map((value) => <option key={value} value={value}>{value}</option>)}<option value="Belum">Belum ditentukan</option></select></label>
-          <div className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Tugas Anda</span><button type="button" aria-pressed={onlyMine} onClick={() => { setOnlyMine((value) => !value); setPage(1); }} className={`${control} w-full justify-center ${onlyMine ? 'bg-violet-600' : 'bg-slate-800 text-slate-300'}`}><UserRound aria-hidden="true" className="h-4 w-4" />Tugas saya{myTaskCount > 0 && ` (${myTaskCount})`}</button></div>
-          <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Status penanganan</span><select className={input} value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value); setPage(1); }}><option value="Semua">Semua status</option>{WORKFLOW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
-          <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Implant</span><select className={input} value={implantFilter} onChange={(event) => { setImplantFilter(event.target.value); setPage(1); }}><option value="Semua">Semua implant</option>{IMPLANTS.map((implant) => <option key={implant.key} value={implant.key}>{implant.label}</option>)}</select></label>
-          <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Periode rekap</span><select className={input} value={period} onChange={(event) => { setPeriod(event.target.value); if (event.target.value === 'period') { setRangeStart(''); setRangeEnd(''); } setPage(1); }}><option value="all">Semua tanggal</option><option value="period">{periodMode === 'week' ? 'Minggu terpilih' : 'Bulan terpilih'}</option></select></label>
-          <div className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Rentang tanggal</span><DateRangePicker start={rangeStart} end={rangeEnd} today={today()} onApply={(nextStart, nextEnd) => { setRangeStart(nextStart); setRangeEnd(nextEnd); setPeriod('all'); setPage(1); }} onClear={() => { setRangeStart(''); setRangeEnd(''); setPage(1); }} className={`${input} border-slate-700`} /></div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Status penanganan</span><select className={input} value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value); setPage(1); }}><option value="Semua">Semua status</option>{WORKFLOW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
+            <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Status Case</span><select aria-label="Filter status case" value={statusCaseFilter} onChange={(event) => { setStatusCaseFilter(event.target.value); setPage(1); }} className={input}><option value="Semua">Semua status case</option>{STATUS_CASE.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
+            <div className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Tugas Anda</span><button type="button" aria-pressed={onlyMine} onClick={() => { setOnlyMine((value) => !value); setPage(1); }} className={`${control} w-full justify-center ${onlyMine ? 'bg-violet-600' : 'bg-slate-800 text-slate-300'}`}><UserRound aria-hidden="true" className="h-4 w-4" />Tugas saya{myTaskCount > 0 && ` (${myTaskCount})`}</button></div>
+          </div>
+          <button type="button" aria-expanded={showAllFilters} onClick={() => setShowAllFilters((value) => !value)} className="mt-3 flex items-center gap-1.5 text-sm font-medium text-blue-300 hover:underline"><SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />{showAllFilters ? 'Sembunyikan filter lainnya' : 'Tampilkan filter lainnya'}{!showAllFilters && hiddenFilterCount > 0 && <span className="rounded-full bg-blue-500/20 px-1.5 py-0.5 text-xs font-semibold text-blue-200">{hiddenFilterCount} aktif</span>}<ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 transition-transform ${showAllFilters ? 'rotate-180' : ''}`} /></button>
+          {showAllFilters && <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Tingkat keparahan</span><select aria-label="Filter tingkat keparahan" value={level} onChange={(event) => { setLevel(event.target.value); setOnlyMine(false); setPage(1); }} className={input}><option value="Semua">Semua tingkat</option>{['C1', 'C2', 'C3', 'C4'].map((value) => <option key={value} value={value}>{value}</option>)}<option value="Belum">Belum ditentukan</option></select></label>
+            <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Implant</span><select className={input} value={implantFilter} onChange={(event) => { setImplantFilter(event.target.value); setPage(1); }}><option value="Semua">Semua implant</option>{IMPLANTS.map((implant) => <option key={implant.key} value={implant.key}>{implant.label}</option>)}</select></label>
+            <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Periode rekap</span><select className={input} value={period} onChange={(event) => { setPeriod(event.target.value); if (event.target.value === 'period') { setRangeStart(''); setRangeEnd(''); } setPage(1); }}><option value="all">Semua tanggal</option><option value="period">{periodMode === 'week' ? 'Minggu terpilih' : 'Bulan terpilih'}</option></select></label>
+            <div className="flex flex-col gap-1.5"><span className="text-xs font-medium text-slate-400">Rentang tanggal</span><DateRangePicker start={rangeStart} end={rangeEnd} today={today()} onApply={(nextStart, nextEnd) => { setRangeStart(nextStart); setRangeEnd(nextEnd); setPeriod('all'); setPage(1); }} onClear={() => { setRangeStart(''); setRangeEnd(''); setPage(1); }} className={`${input} border-slate-700`} /></div>
+          </div>}
         </div>
         {period === 'period' && <div className="space-y-3 rounded-xl border border-blue-900/60 bg-blue-950/20 p-3"><p className="text-sm text-blue-200">{formatDate(summary.start)} – {formatDate(summary.end)}</p>{periodPicker}</div>}
 
