@@ -10,9 +10,9 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
   const showNav = user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
   const tabs = [['form', 'Input laporan'], ['table', user?.role === 'admin' ? 'Data Master' : 'Tugas & laporan saya'], ...(user?.role === 'admin' ? [['users', 'Pengguna']] : [])];
   const unreadCount = unreadItems.length;
-  return <header className="sticky top-0 z-30 -mx-3 -mt-4 border-b border-slate-800 bg-slate-900/95 px-3 py-4 backdrop-blur sm:-mx-8 sm:-mt-8 sm:px-8">
+  return <header className="sticky top-0 z-30 -mx-3 -mt-4 border-b border-slate-800 bg-slate-900/95 px-3 py-4 backdrop-blur sm:-mx-7 sm:-mt-8 sm:px-5">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-      <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Monitoring lapangan</p><h1 className="text-xl font-bold sm:text-2xl">Laporan Komplain</h1></div>
+      <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Monitoring</p><h1 className="text-xl font-bold sm:text-2xl">Laporan Komplain</h1></div>
       <div className="flex items-center gap-2">
         <InfoPanel />
         {showNav && <DropdownMenu.Root>
