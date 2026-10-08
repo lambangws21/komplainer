@@ -8,7 +8,7 @@ const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 roun
 
 export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead }) {
   const showNav = user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
-  const tabs = [['form', 'Input laporan'], ['table', user?.role === 'admin' ? 'Data Master' : 'Tugas & laporan saya'], ...(user?.role === 'admin' ? [['users', 'Pengguna']] : [])];
+  const tabs = [['form', 'Beranda'], ['table', 'Laporan'], ...(user?.role === 'admin' ? [['users', 'Pengguna']] : [])];
   const unreadCount = unreadItems.length;
   return <header className="sticky top-0 z-30 -mx-3 -mt-4 border-b border-slate-800 bg-slate-900/95 px-3 py-4 backdrop-blur sm:-mx-7 sm:-mt-8 sm:px-5">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
@@ -41,6 +41,6 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
         </DropdownMenu.Root>}
       </div>
     </div>
-    {showNav && <nav aria-label="Halaman komplain" className={`mx-auto mt-3 grid max-w-7xl gap-1.5 sm:flex sm:flex-wrap ${user?.role === 'admin' ? 'grid-cols-3' : 'grid-cols-2'}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={tab === value ? 'page' : undefined} className={`${buttonClass} min-w-0 px-2 text-xs sm:px-4 sm:text-sm ${tab === value ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{label}</button>)}</nav>}
+    {showNav && <nav aria-label="Halaman komplain" className={`mx-auto mt-3 grid max-w-7xl gap-1.5 sm:flex sm:flex-wrap ${user?.role === 'admin' ? 'grid-cols-3' : 'grid-cols-2'}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`${buttonClass} min-w-0 px-2 text-xs sm:px-4 sm:text-sm ${(tab === value || (value === 'table' && tab === 'recap')) ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{label}</button>)}</nav>}
   </header>;
 }

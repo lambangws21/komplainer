@@ -50,7 +50,7 @@ export function formatHistoryChange(change, levelsList, formatDateFn) {
 export function workflowCardStyle(item, today) {
   const status = handlingStatus(item);
   if (today && isOverdue(item, today)) return 'border-red-800/60 bg-red-950/10';
-  if (status === 'Selesai') return 'border-emerald-800/60 bg-emerald-950/10';
+  if (status === 'Selesai') return 'border-slate-700/70 bg-slate-950/50';
   if (status === 'Baru') return 'border-slate-700/70 bg-slate-950/50';
-  return 'border-blue-800/60 bg-blue-950/10';
+  return 'border-slate-700/70 bg-slate-950/50';
 }

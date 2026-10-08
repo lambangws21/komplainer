@@ -115,3 +115,14 @@ main.komplain-theme {
   .komplain-theme textarea { font-size: 16px; }
   .komplain-theme .text-xs { font-size: 12px; }
 }
+
+/* Visual editor: formatting is visible while the stored payload remains text. */
+.visual-report-input { min-height: 7rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.visual-report-input p { min-height: 1.5em; margin: 0; }
+.visual-report-input ul { list-style: disc; padding-left: 1.5rem; }
+.visual-report-input li p { margin: 0; }
+.visual-report-input strong { font-weight: 700; }
+.visual-report-input em { font-style: italic; }
+.visual-report-input u { text-decoration: underline; }
+.visual-report-input:has(> p:only-child > br:only-child)::before { content: attr(data-placeholder); color: #94a3b8; float: left; height: 0; pointer-events: none; }
+@media (max-width: 767px) { .visual-report-input { font-size: 16px; } }

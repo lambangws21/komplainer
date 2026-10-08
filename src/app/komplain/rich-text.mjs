@@ -42,16 +42,16 @@ export function toggleListLines(textarea, value, onChange) {
 
 const INLINE_PATTERN = /(\*\*(.+?)\*\*)|(\+\+(.+?)\+\+)|(__(.+?)__)/;
 
-export function parseInline(text) {
+export function parseInline(text, inherited = {}) {
   const segments = [];
   let remaining = String(text ?? '');
   while (remaining.length) {
     const match = INLINE_PATTERN.exec(remaining);
-    if (!match) { segments.push({ text: remaining }); break; }
-    if (match.index > 0) segments.push({ text: remaining.slice(0, match.index) });
-    if (match[1]) segments.push({ text: match[2], bold: true });
-    else if (match[3]) segments.push({ text: match[4], underline: true });
-    else if (match[5]) segments.push({ text: match[6], italic: true });
+    if (!match) { segments.push({ text: remaining, ...inherited }); break; }
+    if (match.index > 0) segments.push({ text: remaining.slice(0, match.index), ...inherited });
+    const mark = match[1] ? 'bold' : match[3] ? 'underline' : 'italic';
+    const inner = match[2] ?? match[4] ?? match[6];
+    segments.push(...parseInline(inner, { ...inherited, [mark]: true }));
     remaining = remaining.slice(match.index + match[0].length);
   }
   return segments;
