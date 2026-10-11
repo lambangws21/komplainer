@@ -1,0 +1,16 @@
+.git/
+.claude/
+.vercel/
+.next/
+.next-dev/
+node_modules/
+.local-backups/
+.env*
+*firebase-adminsdk*.json
+*service-account*.json
+*.pem
+*.tsbuildinfo
+.DS_Store
+docs/
+tests/
+scripts/

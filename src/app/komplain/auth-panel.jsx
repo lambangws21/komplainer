@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { LogIn, ShieldCheck, UserCog } from 'lucide-react';
+import { ArrowRight, LoaderCircle, LogIn, UserCog } from 'lucide-react';
 import LoadingState from './loading-state';
 import PasswordInput from './password-input';
 import { apiRequest, postJson } from './api-client.mjs';
@@ -29,23 +29,41 @@ export function LoginPanel({ onLogin, initialError, notice }) {
     } catch (error) { setError(error.message); } finally { setBusy(false); }
   }
   function switchMode() { setRegister(!register); setError(''); setPassword(''); setConfirm(''); }
-  return <section aria-label={register ? 'Daftar sebagai Pelapor' : 'Masuk ke Komplainer'} className="mx-auto w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
-    <div className="mb-5 inline-flex rounded-2xl bg-blue-500/15 p-3 text-blue-300"><ShieldCheck aria-hidden="true" className="h-7 w-7" /></div>
-    <h2 className="text-2xl font-bold">{register ? 'Daftar sebagai Pelapor' : 'Masuk ke Komplainer'}</h2>
-    <p className="mt-2 text-sm leading-6 text-slate-400">{register ? 'Buat akun Anda. Admin perlu menyetujui pendaftaran sebelum Anda dapat membuka atau membuat laporan.' : 'Masuk dengan akun Anda'}</p>
-    {notice && <p role="status" className="mt-4 rounded-xl bg-blue-950/40 p-3 text-sm text-blue-200">{notice}</p>}
-    {(error || (!register && initialError)) && <p role="alert" className="mt-4 rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm leading-6 text-red-200">{error || initialError}</p>}
-    <form onSubmit={submit} className="mt-6 space-y-4" aria-busy={busy}><fieldset disabled={busy} className="space-y-4">
-      {register && <><div><label htmlFor="register-name" className="mb-2 block text-sm font-medium">Nama lengkap</label><input id="register-name" autoComplete="name" required maxLength={200} value={nama} onChange={(event) => setNama(event.target.value)} className={input} /></div><div><label htmlFor="register-username" className="mb-2 block text-sm font-medium">Username</label><input id="register-username" autoComplete="username" required pattern="[a-z0-9][a-z0-9_.-]{2,31}" title="3-32 karakter: huruf kecil, angka, titik, garis bawah, atau strip" maxLength={32} value={username} onChange={(event) => setUsername(event.target.value.toLowerCase())} className={input} /><p className="mt-2 text-xs text-slate-400">Dapat digunakan untuk masuk selain email, 3-32 karakter huruf kecil/angka.</p></div><div><label htmlFor="register-team" className="mb-2 block text-sm font-medium">Team Pelapor</label><select id="register-team" required value={unit} onChange={(event) => setUnit(event.target.value)} className={input}><option value="" disabled>Pilih team…</option>{REGISTRATION_UNITS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div></>}
-      <div><label htmlFor="login-email" className="mb-2 block text-sm font-medium">{register ? 'Email' : 'Email atau username'}</label><input id="login-email" type={register ? 'email' : 'text'} autoComplete="username" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={input} /></div>
-      <div><label htmlFor="login-password" className="mb-2 block text-sm font-medium">Password{register ? ' (minimal 6 karakter)' : ''}</label><PasswordInput id="login-password" disabled={busy} autoComplete={register ? 'new-password' : 'current-password'} required minLength={register ? 6 : undefined} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className={input} /></div>
-      {register && <div><label htmlFor="register-confirm" className="mb-2 block text-sm font-medium">Ulangi password</label><PasswordInput id="register-confirm" visibilityLabel="konfirmasi password" disabled={busy} autoComplete="new-password" required minLength={6} maxLength={128} value={confirm} onChange={(event) => setConfirm(event.target.value)} className={input} /></div>}
-      <button disabled={busy} className={`${button} w-full bg-blue-600 hover:bg-blue-500`}><LogIn aria-hidden="true" className="h-4 w-4" />{busy ? register ? 'Mendaftarkan akun…' : 'Memeriksa akun…' : register ? 'Daftar' : 'Masuk'}</button>
-    </fieldset></form>
-    {busy && <div className="mt-4"><LoadingState compact title={register ? 'Mendaftarkan akun…' : 'Memeriksa akun…'} description="Tunggu hingga proses selesai." /></div>}
-    <button type="button" disabled={busy} onClick={switchMode} className={`${button} mt-4 w-full border border-slate-700 text-blue-300`}>{register ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar sekarang'}</button>
-    {!register && <p className="mt-5 text-xs leading-5 text-slate-400">Lupa password? Hubungi admin untuk mereset password.</p>}
-  </section>;
+  const submitLabel = busy ? register ? 'Mendaftarkan akun…' : 'Memeriksa akun…' : register ? 'Daftar sebagai pelapor' : 'Masuk';
+  const loginInput = `${input} border-slate-700/80 bg-slate-950/60 placeholder:text-slate-500 transition-colors hover:border-slate-600`;
+  return (
+    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center py-6">
+    <section aria-labelledby="auth-title" className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 shadow-xl shadow-black/10">
+      <div className="p-5 sm:p-7">
+        <h2 id="auth-title" className="text-2xl font-semibold tracking-tight">{register ? 'Buat akun pelapor' : 'Selamat datang'}</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">{register ? 'Lengkapi data Anda. Akun dapat digunakan setelah disetujui Admin.' : 'Masuk untuk melihat laporan dan perkembangan penanganannya.'}</p>
+        {notice && <p role="status" className="mt-4 rounded-xl border border-blue-900/60 bg-blue-950/30 p-3 text-sm leading-6 text-blue-200">{notice}</p>}
+        {(error || (!register && initialError)) && <div role="alert" className="mt-4 rounded-xl border border-red-900/70 bg-red-950/30 p-3 text-sm leading-6 text-red-200"><p className="font-medium">{register ? 'Pendaftaran belum berhasil' : 'Belum bisa masuk'}</p><p className="mt-1 break-words">{error || initialError}</p></div>}
+        <form onSubmit={submit} className="mt-6" aria-busy={busy}>
+          <fieldset disabled={busy} className="space-y-4">
+            {register && <>
+              <div><label htmlFor="register-name" className="mb-2 block text-sm font-medium">Nama lengkap</label><input id="register-name" autoComplete="name" placeholder="Nama yang akan tampil di laporan" required maxLength={200} value={nama} onChange={(event) => setNama(event.target.value)} className={loginInput} /></div>
+              <div><label htmlFor="register-username" className="mb-2 block text-sm font-medium">Username</label><input id="register-username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Contoh: nama.anda" aria-describedby="username-hint" required pattern="[a-z0-9][a-z0-9_.-]{2,31}" title="3–32 karakter: huruf kecil, angka, titik, garis bawah, atau strip" maxLength={32} value={username} onChange={(event) => setUsername(event.target.value.toLowerCase())} className={loginInput} /><p id="username-hint" className="mt-1.5 text-xs leading-5 text-slate-400">3–32 karakter. Bisa digunakan untuk masuk selain email.</p></div>
+              <div><label htmlFor="register-team" className="mb-2 block text-sm font-medium">Team Pelapor</label><select id="register-team" required value={unit} onChange={(event) => setUnit(event.target.value)} className={loginInput}><option value="" disabled>Pilih team Anda</option>{REGISTRATION_UNITS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+            </>}
+            <div><label htmlFor="login-email" className="mb-2 block text-sm font-medium">{register ? 'Email' : 'Email atau username'}</label><input id="login-email" type={register ? 'email' : 'text'} autoComplete={register ? 'email' : 'username'} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder={register ? 'nama@contoh.com' : 'Masukkan email atau username'} required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={loginInput} /></div>
+            <div><label htmlFor="login-password" className="mb-2 block text-sm font-medium">Password</label><PasswordInput key={register ? 'register' : 'login'} id="login-password" disabled={busy} autoComplete={register ? 'new-password' : 'current-password'} placeholder={register ? 'Buat password Anda' : 'Masukkan password'} aria-describedby={register ? 'password-hint' : undefined} required minLength={register ? 6 : undefined} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className={loginInput} />{register && <p id="password-hint" className="mt-1.5 text-xs text-slate-400">Minimal 6 karakter.</p>}</div>
+            {register && <div><label htmlFor="register-confirm" className="mb-2 block text-sm font-medium">Konfirmasi password</label><PasswordInput id="register-confirm" visibilityLabel="konfirmasi password" disabled={busy} autoComplete="new-password" placeholder="Ketik kembali password Anda" required minLength={6} maxLength={128} value={confirm} onChange={(event) => setConfirm(event.target.value)} className={loginInput} /></div>}
+            <button type="submit" aria-label={submitLabel} disabled={busy} className={`${button} w-full bg-blue-500 text-white shadow-lg shadow-blue-500/30 ring-1 ring-inset ring-blue-400/50 transition-colors hover:bg-blue-400`}>
+              {busy ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <LogIn aria-hidden="true" className="h-4 w-4" />}
+              <span role="status">{submitLabel}</span>
+            </button>
+          </fieldset>
+        </form>
+        {!register && <details className="mt-4 text-sm text-slate-400"><summary className="w-fit cursor-pointer rounded-md py-2 text-xs font-medium text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Butuh bantuan masuk?</summary><p className="mt-1 text-xs leading-5">Lupa password atau akun belum disetujui? Hubungi Admin untuk reset password atau pemeriksaan status akun.</p></details>}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 border-t border-slate-800 bg-slate-950/30 px-5 py-3 sm:px-7">
+        <p className="text-xs text-slate-400">{register ? 'Sudah punya akun?' : 'Belum punya akun?'}</p>
+        <button type="button" disabled={busy} onClick={switchMode} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-semibold text-blue-300 hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50">{register ? 'Masuk' : 'Daftar sebagai pelapor'}<ArrowRight aria-hidden="true" className="h-4 w-4" /></button>
+      </div>
+    </section>
+    </div>
+  );
 }
 export function ProfilePanel({ user, onChanged, onExpired }) {
   const [nama, setNama] = useState(user.nama);

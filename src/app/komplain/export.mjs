@@ -1,9 +1,10 @@
+import { initialSolution, handlingSolution } from './report-process.mjs';
 import { detectImplants } from './implant.mjs';
 
 const COLUMNS = [
   ['tanggal', 'Tanggal'], ['dokter', 'Dokter'], ['rumahSakit', 'Rumah Sakit'], ['team', 'Team Pelapor'],
   ['tindakan', 'Tindakan'], [(row) => detectImplants(row).map((implant) => implant.label).join(' + '), 'Implant'],
-  ['komplain', 'Masalah'], ['jalanKeluar', 'Solusi Awal'], ['penangananSelanjutnya', 'RTL'],
+  ['komplain', 'Masalah'], [initialSolution, 'Solusi Awal'], [handlingSolution, 'Hasil Penanganan PIC'], ['penangananSelanjutnya', 'RTL'],
   ['statusCase', 'Status Case'], ['status', 'Tingkat Keparahan'], ['statusPenanganan', 'Status Penanganan'], ['picNama', 'PIC'], ['tenggat', 'Tenggat'], ['pelaporNama', 'Pelapor'],
 ];
 function escapeCsv(value) {

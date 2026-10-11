@@ -8,7 +8,7 @@ const FUNGSI = [
   { icon: Package, color: 'text-orange-300 bg-orange-500/15', text: 'Identifikasi implant terkait berdasarkan informasi dalam laporan' },
   { icon: Users, color: 'text-pink-300 bg-pink-500/15', text: 'Pendaftaran Pelapor dengan persetujuan Admin sebelum dapat mengakses laporan' },
   { icon: ClipboardList, color: 'text-blue-300 bg-blue-500/15', text: 'Catat & kelola laporan komplain lapangan — buat, edit, dan arsipkan laporan milik sendiri' },
-  { icon: UserRound, color: 'text-violet-300 bg-violet-500/15', text: 'Tentukan PIC, pantau tenggat, dan catat tindak lanjut hingga laporan selesai' },
+  { icon: UserRound, color: 'text-violet-300 bg-violet-500/15', text: 'Tentukan PIC dan catat RTL hingga komplain selesai' },
   { icon: Workflow, color: 'text-amber-300 bg-amber-500/15', text: 'Alur status: Baru → Diproses/Menunggu → Selesai, dengan opsi buka kembali' },
   { icon: BarChart3, color: 'text-emerald-300 bg-emerald-500/15', text: 'Rekap mingguan & bulanan, plus export data ke Excel (CSV)' },
   { icon: SlidersHorizontal, color: 'text-cyan-300 bg-cyan-500/15', text: 'Pencarian, filter tingkat keparahan/status, dan filter rentang tanggal kustom' },

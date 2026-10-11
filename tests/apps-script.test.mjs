@@ -7,9 +7,9 @@ test('migration preserves old rows and headers and never selects the summary she
   const row = ['OLD-1', '2026-09-30', 'Dokter lama', 'Unit lama', 'Tindakan lama', 'Masalah lama', '', 'C1 - Critical'];
   const f = createFixture({ legacyRows: [row] });
   assert.deepEqual(f.data.data[1], row);
-  assert.equal(f.data.data[0].length, 23);
+  assert.equal(f.data.data[0].length, 24);
   f.context.setupKomplainer();
-  assert.equal(f.data.data[0].length, 23);
+  assert.equal(f.data.data[0].length, 24);
   const result = f.request({ action: 'list', ...f.adminSession });
   assert.equal(result.data[0].statusPenanganan, 'Baru');
   assert.equal(result.data[0].version, 1);
@@ -45,11 +45,11 @@ test('assignment, follow-up, completion and reopen enforce permissions and versi
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id, tenggat: '2026-10-05' }).data;
   assert.equal(f.request({ action: 'list', ...pic }).data.length, 1);
   assert.equal(f.request({ action: 'list', ...other }).data.length, 1);
-  assert.equal(f.request({ action: 'followUp', ...pic, id: item.id, version: 1, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 409);
-  assert.equal(f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: '', catatan: 'Selesai' }).code, 400);
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', jalanKeluar: '', catatan: 'Mulai diperiksa' }).data;
+  assert.equal(f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: 1, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 409);
+  assert.equal(f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: '', catatan: 'Selesai' }).code, 400);
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', jalanKeluar: '', catatan: 'Mulai diperiksa' }).data;
   assert.equal(f.request({ action: 'update', ...reporter, ...item, tindakan: 'Perubahan' }).code, 403);
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Masalah diperbaiki', catatan: 'Sudah diperiksa' }).data;
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Masalah diperbaiki', catatan: 'Sudah diperiksa' }).data;
   assert.ok(item.selesaiPada);
   assert.equal(f.request({ action: 'reopen', ...pic, id: item.id, version: item.version, catatan: 'Masih bermasalah' }).code, 403);
   item = f.request({ action: 'reopen', ...reporter, id: item.id, version: item.version, catatan: 'Masalah muncul kembali' }).data;
@@ -159,10 +159,10 @@ test('authenticated requests create missing sheets and extend legacy summary hea
   assert.deepEqual(summary.data[1], old);
   f.properties.set('COMPLAINT_SHEET_NAME', 'Komplain Baru');
   f.context.ensureSchema();
-  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 23);
+  assert.equal(f.ss.getSheetByName('Komplain Baru').data[0].length, 24);
   f.data.maxColumns = 8;
   f.context.ensureHeaders(f.data);
-  assert.equal(f.data.maxColumns, 23);
+  assert.equal(f.data.maxColumns, 24);
   const users = f.ss.getSheetByName('Pengguna');
   users.data[0] = users.data[0].slice(0, 8);
   users.data[1] = users.data[1].slice(0, 8);
@@ -199,17 +199,17 @@ test('admin assigns a petugas as PIC without changing their account role', async
   assert.equal(assignedRow.picRole, 'petugas');
   assert.equal('passwordHash' in assignedRow, false);
   assert.equal(f.request({ action: 'session', ...pic }).user.role, 'petugas');
-  assert.equal(f.request({ action: 'followUp', ...owner, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Bukan PIC' }).code, 403);
+  assert.equal(f.request({ action: 'followUp', status: 'C3 - Moderate', ...owner, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Bukan PIC' }).code, 403);
   assert.equal(canFollowUp(item, pic.user), true);
   assert.equal(canFollowUp(item, other.user), false);
-  assert.equal(f.request({ action: 'followUp', ...other, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Tidak berwenang' }).code, 403);
+  assert.equal(f.request({ action: 'followUp', status: 'C3 - Moderate', ...other, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Tidak berwenang' }).code, 403);
   assert.equal(f.request({ action: 'updateUser', ...f.adminSession, ...pic.user, active: false }).code, 409);
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Diperiksa' }).data;
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Diperiksa' }).data;
   assert.equal(item.statusPenanganan, 'Diproses');
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: other.user.id }).data;
   assert.equal(item.picId, other.user.id);
-  assert.equal(f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 403);
-  item = f.request({ action: 'followUp', ...other, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Sudah diperbaiki', catatan: 'Selesai' }).data;
+  assert.equal(f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Solusi', catatan: 'Selesai' }).code, 403);
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...other, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Sudah diperbaiki', catatan: 'Selesai' }).data;
   assert.equal(item.statusPenanganan, 'Selesai');
 });
 
@@ -252,7 +252,7 @@ test('hospital persists through create, edit and follow-up and old clients prese
   assert.equal(item.rumahSakit, 'RS Sehat');
   const pic = f.addUser('hospital-pic@example.test', 'petugas');
   item = f.request({ ...f.adminSession, action: 'assign', id: item.id, version: item.version, picId: pic.user.id }).data;
-  item = f.request({ ...pic, action: 'followUp', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Alat diganti dan diuji', catatan: 'Verifikasi selesai' }).data;
+  item = f.request({ ...pic, action: 'followUp', status: 'C3 - Moderate', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Alat diganti dan diuji', catatan: 'Verifikasi selesai' }).data;
   assert.equal(item.rumahSakit, 'RS Sehat');
   assert.equal(item.jalanKeluar, 'Alat diganti dan diuji');
   assert.equal(f.request({ ...f.adminSession, action: 'detail', id: item.id }).data.rumahSakit, 'RS Sehat');
@@ -287,7 +287,7 @@ test('report owner can delete their own untouched report, but not once handling 
   const second = f.createReport(owner).data;
   const pic = f.addUser('pic@example.test', 'petugas');
   const assigned = f.request({ action: 'assign', ...f.adminSession, id: second.id, version: second.version, picId: pic.user.id }).data;
-  const inProgress = f.request({ action: 'followUp', ...pic, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Mulai' }).data;
+  const inProgress = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Mulai' }).data;
   assert.equal(f.request({ action: 'delete', ...owner, id: inProgress.id, version: inProgress.version }).code, 403);
   assert.equal(f.request({ action: 'delete', ...f.adminSession, id: inProgress.id, version: inProgress.version }).status, 'success');
 });
@@ -312,7 +312,7 @@ test('a petugas can self-assign an unassigned case but not take over an already-
   let assigned = f.request({ action: 'assign', ...firstResponder, id: item.id, version: item.version, picId: firstResponder.user.id }).data;
   assert.equal(assigned.picId, firstResponder.user.id);
   assert.equal(f.request({ action: 'assign', ...latecomer, id: assigned.id, version: assigned.version, picId: latecomer.user.id }).code, 403);
-  assigned = f.request({ action: 'followUp', ...firstResponder, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Ditangani' }).data;
+  assigned = f.request({ action: 'followUp', status: 'C3 - Moderate', ...firstResponder, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Ditangani' }).data;
   assert.equal(assigned.statusPenanganan, 'Diproses');
 });
 test('PIC can set the next-handling plan while following up on a case', () => {
@@ -321,7 +321,7 @@ test('PIC can set the next-handling plan while following up on a case', () => {
   const pic = f.addUser('pic@example.test', 'petugas');
   let item = f.createReport(owner).data;
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Mulai', penangananSelanjutnya: 'Audit SLA bulanan' }).data;
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Mulai', penangananSelanjutnya: 'Audit SLA bulanan' }).data;
   assert.equal(item.penangananSelanjutnya, 'Audit SLA bulanan');
 });
 test('existing nineteen-column sheet gains hospital header without shifting report data', () => {
@@ -349,7 +349,7 @@ test('photos are uploaded to Drive on create, appended on update, and attached t
   item = f.request({ action: 'update', ...owner, ...item, photos: [photo('b')] }).data;
   assert.equal(item.fotoUrls.length, 2);
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Diperiksa', photos: [photo('c')] }).data;
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'Diperiksa', photos: [photo('c')] }).data;
   assert.equal(item.fotoUrls.length, 2);
   const detail = f.request({ action: 'detail', ...pic, id: item.id });
   assert.equal(detail.history[0].fotoUrls.length, 1);
@@ -391,12 +391,12 @@ test("a report's total photos across create and every follow-up are capped at MA
   let item = f.createReport(reporter, { photos: photos(5, 'a') }).data;
   assert.equal(item.fotoUrls.length, 5);
   item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 1', photos: photos(5, 'b') }).data;
-  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 2', photos: photos(5, 'c') }).data;
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 1', photos: photos(5, 'b') }).data;
+  item = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 2', photos: photos(5, 'c') }).data;
   const detail = f.request({ action: 'detail', ...pic, id: item.id });
   const historyTotal = detail.history.reduce((sum, entry) => sum + (entry.fotoUrls?.length || 0), 0);
   assert.equal(item.fotoUrls.length + historyTotal, 15);
-  const overCap = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 3', photos: photos(1, 'd') });
+  const overCap = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', catatan: 'batch 3', photos: photos(1, 'd') });
   assert.equal(overCap.code, 400);
   assert.match(overCap.message, /batas maksimal/);
 });
@@ -453,4 +453,21 @@ test('report creation is rate-limited per user', () => {
   const reporter = f.addUser('rate-limited@example.test');
   for (let i = 0; i < 30; i++) assert.equal(f.createReport(reporter).status, 'success');
   assert.equal(f.createReport(reporter).code, 429);
+});
+
+test('PIC severity is required and initial solution survives follow-up and completion', () => {
+  const f = createFixture();
+  const reporter = f.addUser('process-reporter@example.test');
+  const pic = f.addUser('process-pic@example.test', 'petugas');
+  let item = f.createReport(reporter, { jalanKeluar: 'Solusi awal pelapor' }).data;
+  item = f.request({ action: 'assign', ...f.adminSession, id: item.id, version: item.version, picId: pic.user.id }).data;
+  assert.equal(f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Diproses', jalanKeluar: '' }).code, 400);
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, status: 'C3 - Moderate', statusPenanganan: 'Menunggu', jalanKeluar: '', penangananSelanjutnya: 'Konfirmasi jadwal' }).data;
+  assert.equal(item.solusiAwal, 'Solusi awal pelapor');
+  assert.equal(item.jalanKeluar, '');
+  item = f.request({ action: 'followUp', ...pic, id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Alat diganti dan diverifikasi' }).data;
+  assert.equal(item.solusiAwal, 'Solusi awal pelapor');
+  assert.equal(item.jalanKeluar, 'Alat diganti dan diverifikasi');
+  const detail = f.request({ action: 'detail', ...reporter, id: item.id }).data;
+  assert.equal(detail.solusiAwal, 'Solusi awal pelapor');
 });

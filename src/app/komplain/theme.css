@@ -105,6 +105,15 @@ main.komplain-theme {
   .komplain-theme :is(button, a, input, select, textarea) { transition: none; }
 }
 
+/* Announcement banner: only long text scrolls, and only while motion is not reduced. */
+@keyframes komplain-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.komplain-marquee-track { display: inline-flex; width: max-content; animation: komplain-marquee 16s linear infinite; }
+.komplain-marquee-track:hover,
+.komplain-marquee-track:focus-within { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .komplain-marquee-track { animation: none; }
+}
+
 /* Keep touch targets and form text usable even with a small browser default font. */
 @media (max-width: 767px) {
   .komplain-theme button,
@@ -126,3 +135,21 @@ main.komplain-theme {
 .visual-report-input u { text-decoration: underline; }
 .visual-report-input:has(> p:only-child > br:only-child)::before { content: attr(data-placeholder); color: #94a3b8; float: left; height: 0; pointer-events: none; }
 @media (max-width: 767px) { .visual-report-input { font-size: 16px; } }
+
+/* Compact desktop report entry; mobile controls keep their touch dimensions. */
+@media (min-width: 1024px) {
+  .report-input-fields input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+  .report-input-fields select {
+    min-height: 2.5rem;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    font-size: .875rem;
+    line-height: 1.25rem;
+  }
+  .report-input-fields label[for], .report-input-fields legend { margin-bottom: .375rem; }
+  .report-input-fields [role="toolbar"] { gap: .125rem; margin-bottom: .25rem; padding: .125rem; }
+  .report-input-fields [role="toolbar"] button { height: 2rem; width: 2rem; }
+  .report-input-fields .visual-report-input { min-height: 6rem; padding: .625rem .75rem; font-size: .875rem; }
+  .report-input-fields label:has(> input[type="radio"]) { min-height: 2.5rem; padding-top: .5rem; padding-bottom: .5rem; }
+  .report-input-fields summary { padding-top: .375rem; padding-bottom: .375rem; }
+}

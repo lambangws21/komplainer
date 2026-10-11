@@ -1,0 +1,8 @@
+// Merge inside existing match /databases/{database}/documents.
+// Backend uses Admin SDK; client reads/writes go through authenticated Next.js API.
+// Other permissive wildcard matches MUST NOT grant these paths access.
+match /komplainer_reports/{document=**} { allow read, write: if false; }
+match /komplainer_backup_jobs/{document=**} { allow read, write: if false; }
+match /komplainer_limits/{document=**} { allow read, write: if false; }
+match /komplainer_mentions/{document=**} { allow read, write: if false; }
+match /komplainer_announcements/{document=**} { allow read, write: if false; }

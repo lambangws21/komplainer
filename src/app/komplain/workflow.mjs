@@ -16,7 +16,7 @@ export function daysSince(isoDate) {
   return Number.isNaN(parsed) ? null : Math.floor((Date.now() - parsed) / 86400000);
 }
 // Which editable fields an "update" audit entry actually changed, as readable labels.
-const CONTENT_FIELD_LABELS = { tanggal: 'Tanggal', dokter: 'Dokter', rumahSakit: 'Rumah Sakit', team: 'Team Pelapor', tindakan: 'Tindakan', komplain: 'Masalah', jalanKeluar: 'Penyelesaian tindak lanjut', penangananSelanjutnya: 'RTL' };
+const CONTENT_FIELD_LABELS = { tanggal: 'Tanggal', dokter: 'Dokter', rumahSakit: 'Rumah Sakit', team: 'Team Pelapor', tindakan: 'Tindakan', komplain: 'Masalah', solusiAwal: 'Solusi awal pelapor', jalanKeluar: 'Hasil penanganan PIC', penangananSelanjutnya: 'RTL' };
 export function editedFieldLabels(detailJson) {
   try {
     const detail = JSON.parse(detailJson || '{}');

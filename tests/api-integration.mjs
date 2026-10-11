@@ -17,7 +17,7 @@ const mock = createServer(async (req, res) => {
   catch { res.statusCode = 400; res.end('{}'); }
 });
 await new Promise((resolve) => mock.listen(4100, '127.0.0.1', resolve));
-const app = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', '3100'], { env: { ...process.env, AUTH_PROVIDER: 'sheets', GOOGLE_SCRIPT_URL: 'http://127.0.0.1:4100', GOOGLE_SCRIPT_API_KEY: fakeKey }, stdio: ['ignore', 'pipe', 'pipe'] });
+const app = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', '3100'], { env: { ...process.env, AUTH_PROVIDER: 'sheets', DATA_PROVIDER: 'apps-script', FIREBASE_BACKUP_ENABLED: 'false', GOOGLE_SCRIPT_URL: 'http://127.0.0.1:4100', GOOGLE_SCRIPT_API_KEY: fakeKey }, stdio: ['ignore', 'pipe', 'pipe'] });
 let output = ''; app.stdout.on('data', (chunk) => { output += chunk; }); app.stderr.on('data', (chunk) => { output += chunk; });
 const origin = 'http://localhost:3100';
 let cookie = '';
@@ -46,7 +46,7 @@ try {
   cookie = header.split(';')[0];
   assert.equal((await request('/api/auth/session')).status, 200);
   assert.equal((await request('/api/photo?id=invalid')).status, 400);
-  const create = await request('/api/komplain', { action: 'create', requestId: randomUUID(), tanggal: '2026-10-03', dokter: 'Dokter Uji', team: 'Unit Uji', tindakan: 'Pemeriksaan', komplain: 'Masalah uji integrasi', statusCase: 'Ada Kendala', status: 'C3 - Moderate', jalanKeluar: '' });
+  const create = await request('/api/komplain', { action: 'create', requestId: randomUUID(), tanggal: '2026-10-03', dokter: 'Dokter Uji', team: 'Unit Uji', tindakan: 'Pemeriksaan', komplain: 'Masalah uji integrasi', statusCase: 'Ada Kendala', jalanKeluar: '' });
   assert.equal(create.status, 200, JSON.stringify(await create.clone().json()));
   const list = await request('/api/komplain');
   assert.match(list.headers.get('cache-control'), /no-store/);
@@ -71,11 +71,11 @@ try {
   assert.equal((await request(`/api/komplain?id=${encodeURIComponent(item.id)}`)).status, 404);
   assert.equal((await request('/api/komplain', { action: 'assign', id: item.id, version: item.version, picId: reporter.user.id })).status, 404);
   await loginAs(pic.user.email);
-  response = await request('/api/komplain', { action: 'followUp', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: '' });
+  response = await request('/api/komplain', { action: 'followUp', status: 'C3 - Moderate', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: '' });
   assert.equal(response.status, 400);
-  response = await request('/api/komplain', { action: 'followUp', id: item.id, version: item.version, statusPenanganan: 'Diproses', jalanKeluar: 'Sedang diperiksa', status: 'C3 - Moderate', penangananSelanjutnya: 'Koordinasi PIC' });
+  response = await request('/api/komplain', { action: 'followUp', status: 'C3 - Moderate', id: item.id, version: item.version, statusPenanganan: 'Diproses', jalanKeluar: 'Sedang diperiksa', penangananSelanjutnya: 'Koordinasi PIC' });
   assert.equal(response.status, 200); item = (await response.json()).data;
-  response = await request('/api/komplain', { action: 'followUp', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Selesai melalui API', catatan: 'Hasil pemeriksaan selesai' });
+  response = await request('/api/komplain', { action: 'followUp', status: 'C3 - Moderate', id: item.id, version: item.version, statusPenanganan: 'Selesai', jalanKeluar: 'Selesai melalui API', catatan: 'Hasil pemeriksaan selesai' });
   assert.equal(response.status, 200); item = (await response.json()).data; assert.equal(item.statusPenanganan, 'Selesai');
   await loginAs('admin@example.test');
   assert.equal((await request('/api/users')).status, 200);

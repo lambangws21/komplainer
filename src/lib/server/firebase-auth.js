@@ -1,6 +1,5 @@
 import 'server-only';
-import { readFileSync } from 'node:fs';
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { firebaseApp } from './firebase-app.mjs';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
 import { ApiError } from './api-error.mjs';
@@ -9,16 +8,7 @@ import { SESSION_SECONDS } from './password.mjs';
 
 export const FIREBASE_COOKIE = 'komplain_firebase_session';
 export const usesFirebase = () => process.env.AUTH_PROVIDER === 'firebase';
-export function firebaseAuth() {
-  const existing = getApps().find((app) => app.name === 'komplainer');
-  if (existing) return getAuth(existing);
-  try {
-    const account = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
-      : JSON.parse(readFileSync(process.env.FIREBASE_SERVICE_ACCOUNT_PATH, 'utf8'));
-    return getAuth(initializeApp({ credential: cert(account), projectId: account.project_id }, 'komplainer'));
-  } catch { throw new ApiError('Konfigurasi Firebase Admin belum valid. Periksa kredensial server.', 503); }
-}
+export function firebaseAuth() { return getAuth(firebaseApp()); }
 export async function firebasePasswordLogin(email, password) { return firebasePasswordRequest('signInWithPassword', email, password); }
 export async function firebasePasswordRegister(email, password, displayName) { return firebasePasswordRequest('signUp', email, password, displayName); }
 async function firebasePasswordRequest(method, email, password, displayName) {

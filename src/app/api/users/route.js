@@ -1,4 +1,5 @@
 import { callScript, json, errorResponse, readBody, assertSameOrigin, ApiError } from '@/lib/server/apps-script';
+import { callReports } from '@/lib/server/report-service';
 import { randomUUID } from 'node:crypto';
 import { hashPassword, validatePassword } from '@/lib/server/password.mjs';
 import { usesFirebase, firebaseAuth } from '@/lib/server/firebase-auth';
@@ -61,7 +62,7 @@ export async function POST(request) {
       assertUsernameAvailable(accounts, username, target.firebaseUid);
       const metadata = { role: body.role, unit, active: body.active, mustChangePassword: target.mustChangePassword, username };
       appClaims(await auth.getUser(target.firebaseUid), metadata);
-      if (!body.active || body.role !== target.role) await callScript('accountGuard', { id: target.id, role: body.role, active: body.active });
+      if (!body.active || body.role !== target.role) await callReports('accountGuard', { id: target.id, role: body.role, active: body.active });
       await auth.updateUser(target.firebaseUid, { email, displayName: nama, disabled: !body.active });
       await writeFirebaseMetadata(target.firebaseUid, metadata);
       await auth.revokeRefreshTokens(target.firebaseUid);

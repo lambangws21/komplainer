@@ -13,7 +13,7 @@ var LEGACY_HEADERS = ['ID', 'Tanggal', 'Dokter', 'Team', 'Tindakan', 'Komplain',
 // is actually a JSON array of bare Drive file IDs — see photoUrlFromId() below.
 // 'Status' (column 8, LEVELS) is now set by the PIC during triage/follow-up, not by the
 // reporter at creation — 'Status Case' is the reporter's own Sukses/Ada Kendala classification.
-var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL', 'Status Case']);
+var HEADERS = LEGACY_HEADERS.concat(['Status Penanganan', 'PIC ID', 'PIC Nama', 'Tenggat', 'Pelapor ID', 'Pelapor Nama', 'Dibuat Pada', 'Diperbarui Pada', 'Selesai Pada', 'Dihapus Pada', 'Versi', 'Rumah Sakit', 'Penanganan Selanjutnya', 'Foto URL', 'Status Case', 'Solusi Awal']);
 // Photos are uploaded to this Drive folder. Prefer setting DRIVE_FOLDER_ID in Script Properties
 // (no redeploy needed to change it); this constant is only a fallback if that property is unset.
 var DRIVE_FOLDER_ID = '1lxkK1VkOD5qevYDbU-aGCc23rjg4pNRz';
@@ -247,7 +247,7 @@ function parseFotoIds(value) {
   catch (error) { return []; }
 }
 function report(row, index) {
-  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || ''), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoIds: parseFotoIds(row[21]), statusCase: String(row[22] || ''), row: index + 2 };
+  return { id: String(row[0]), tanggal: dateText(row[1]), dokter: clean(row[2]), team: clean(row[3]), tindakan: clean(row[4]), komplain: clean(row[5]), jalanKeluar: clean(row[6]), status: String(row[7] || ''), statusPenanganan: String(row[8] || 'Baru'), picId: String(row[9] || ''), picNama: clean(row[10]), tenggat: dateText(row[11]), pelaporId: String(row[12] || ''), pelaporNama: clean(row[13]), createdAt: timestamp(row[14]), updatedAt: timestamp(row[15]), selesaiPada: timestamp(row[16]), deletedAt: timestamp(row[17]), version: Number(row[18]) || 1, rumahSakit: clean(row[19]), penangananSelanjutnya: clean(row[20]), fotoIds: parseFotoIds(row[21]), statusCase: String(row[22] || ''), solusiAwal: row[23] ? clean(row[23]) : undefined, row: index + 2 };
 }
 function reports() { return rows(ensureHeaders(dataSheet()), HEADERS.length).map(report).filter(function (item) { return item.id && !item.deletedAt; }); }
 function publicReport(item, accounts) {
@@ -273,7 +273,7 @@ function findReport(id, user) {
 }
 function checkVersion(item, body) { if (Number(body.version) !== item.version) fail('Laporan sudah diperbarui pengguna lain. Muat ulang data lalu ulangi perubahan.', 409); }
 function writeReport(item) {
-  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status || '', item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoIds || []), item.statusCase || ''];
+  var values = [item.id, item.tanggal, item.dokter, item.team, item.tindakan, item.komplain, item.jalanKeluar, item.status || '', item.statusPenanganan, item.picId, item.picNama, item.tenggat, item.pelaporId, item.pelaporNama, item.createdAt, item.updatedAt, item.selesaiPada, item.deletedAt, item.version, item.rumahSakit || '', item.penangananSelanjutnya || '', JSON.stringify(item.fotoIds || []), item.statusCase || '', item.solusiAwal || ''];
   dataSheet().getRange(item.row, 1, 1, HEADERS.length).setValues([safeRow(values)]);
 }
 function history(id) {
@@ -307,8 +307,10 @@ function doPost(event) {
     if (typeof body.apiKey !== 'string' || body.apiKey !== secret) fail('Akses layanan tidak diizinkan.', 403);
     lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) fail('Layanan sedang sibuk. Coba lagi.', 503);
+    if (['backupHealth', 'backupSync', 'backupExport', 'backupMaintenance'].indexOf(body.action) !== -1) { ensureSchema(); return jsonResponse(handleFirebaseBackup(body)); }
+    if (props().getProperty('FIRESTORE_WRITE_LOCK') === 'true' && ['create', 'update', 'delete', 'assign', 'followUp', 'reopen'].indexOf(body.action) !== -1) fail('Migrasi data sedang berlangsung. Silakan coba kembali beberapa saat lagi.', 503);
     if (DATA_ONLY) {
-      var permitted = ['list', 'detail', 'create', 'update', 'delete', 'assign', 'followUp', 'reopen', 'accountGuard'];
+      var permitted = ['list', 'detail', 'create', 'update', 'delete', 'assign', 'followUp', 'reopen', 'accountGuard', 'mentionables'];
       if (permitted.indexOf(body.action) === -1) fail('Akun dan login ditangani Firebase, bukan Apps Script.', 403);
       if (!body.firebaseContext || !body.firebaseContext.user || !Array.isArray(body.firebaseContext.accounts)) fail('Konteks Firebase dari server aplikasi diperlukan. Update aplikasi dan login kembali.', 401);
       var verifiedProfile = body.firebaseContext.user;
@@ -466,6 +468,9 @@ function handle(body) {
     if ((body.active === false || body.role !== 'petugas') && reports().some(function (item) { return item.picId === body.id && item.statusPenanganan !== 'Selesai'; })) fail('Alihkan komplain aktif milik pengguna ini sebelum mengubah aksesnya.', 409);
     return { status: 'success' };
   }
+  if (action === 'mentionables') {
+    return { status: 'success', data: allUsers().filter(function (account) { return account.active && account.id !== user.id; }).map(function (account) { return { id: account.id, nama: account.nama, role: account.role }; }) };
+  }
   if (action === 'list') {
     var accounts = allUsers();
     return { status: 'success', data: reports().map(function (item) { return canRead(item, user) ? publicReport(item, accounts) : summaryReport(item); }), assignees: user.role === 'admin' ? accounts.filter(function (item) { return item.active && item.role === 'petugas'; }).map(publicUser) : [] };
@@ -488,6 +493,7 @@ function handle(body) {
     // Severity (status) is no longer set by the reporter — it starts blank and is assigned by
     // the PIC during triage/follow-up. The reporter instead classifies the outcome themselves.
     var created = { id: id, tanggal: validDate(body.tanggal), dokter: textField(body.dokter, 'Dokter', true), rumahSakit: textField(body.rumahSakit, 'Rumah Sakit', false), team: textField(body.team, 'Team Pelapor', true), tindakan: textField(body.tindakan, 'Tindakan', true, 500), komplain: textField(body.komplain, 'Masalah', true, 5000), jalanKeluar: textField(body.jalanKeluar, 'Solusi', false, 5000), penangananSelanjutnya: textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000), status: '', statusCase: body.statusCase, statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, createdAt: nowIso(), updatedAt: nowIso(), selesaiPada: '', deletedAt: '', version: 1, fotoIds: uploadPhotos(body.photos), row: dataSheet().getLastRow() + 1 };
+    created.solusiAwal = created.jalanKeluar;
     writeReport(created);
     audit(id, user, 'Laporan dibuat', '', { statusPenanganan: 'Baru' });
     return { status: 'success', data: publicReport(created), id: id };
@@ -497,21 +503,22 @@ function handle(body) {
   checkVersion(item, body);
   var note = textField(body.catatan, 'Catatan', false, 2000);
   var before = { statusPenanganan: item.statusPenanganan, picId: item.picId, picNama: item.picNama, tenggat: item.tenggat, status: item.status, statusCase: item.statusCase };
-  var contentKeys = ['tanggal', 'dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'penangananSelanjutnya'];
+  var contentKeys = ['tanggal', 'dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'penangananSelanjutnya', 'solusiAwal'];
   contentKeys.forEach(function (key) { before[key] = item[key] || ''; });
   var followUpPhotoIds = [];
   var updatedFields = [];
   if (action === 'update') {
     if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
     // Snapshot the editable content before mutating, so the audit log can say which fields changed.
-    var beforeContent = { tanggal: item.tanggal, dokter: item.dokter, rumahSakit: item.rumahSakit, team: item.team, tindakan: item.tindakan, komplain: item.komplain, jalanKeluar: item.jalanKeluar, penangananSelanjutnya: item.penangananSelanjutnya };
+    var beforeContent = { solusiAwal: item.solusiAwal || '', tanggal: item.tanggal, dokter: item.dokter, rumahSakit: item.rumahSakit, team: item.team, tindakan: item.tindakan, komplain: item.komplain, jalanKeluar: item.jalanKeluar, penangananSelanjutnya: item.penangananSelanjutnya };
     item.tanggal = validDate(body.tanggal);
     item.dokter = textField(body.dokter, 'Dokter', true);
     if (body.rumahSakit !== undefined) item.rumahSakit = textField(body.rumahSakit, 'Rumah Sakit', false);
     item.team = textField(body.team, 'Team Pelapor', true);
     item.tindakan = textField(body.tindakan, 'Tindakan', true, 500);
     item.komplain = textField(body.komplain, 'Masalah', true, 5000);
-    item.jalanKeluar = textField(body.jalanKeluar, 'Solusi', item.statusPenanganan === 'Selesai', 5000);
+    item.solusiAwal = textField(body.jalanKeluar, 'Solusi awal', false, 5000);
+    if (item.statusPenanganan === 'Baru') item.jalanKeluar = item.solusiAwal;
     if (body.penangananSelanjutnya !== undefined) item.penangananSelanjutnya = textField(body.penangananSelanjutnya, 'Penanganan Selanjutnya', false, 5000);
     if (STATUS_CASE.indexOf(body.statusCase) === -1) fail('Status case tidak valid.');
     item.statusCase = body.statusCase;
@@ -546,6 +553,8 @@ function handle(body) {
     if (item.statusPenanganan === 'Selesai') fail('Laporan sudah selesai. Gunakan Buka kembali untuk melanjutkan.', 409);
     if (['Diproses', 'Menunggu', 'Selesai'].indexOf(body.statusPenanganan) === -1) fail('Status penanganan tidak valid.');
     if (!item.picId) fail('Tentukan PIC sebelum memperbarui penanganan.');
+    if (LEVELS.indexOf(body.status || item.status) === -1) fail('Pilih tingkat keparahan sebelum menyimpan tindak lanjut.');
+    if (item.solusiAwal === undefined) item.solusiAwal = item.statusPenanganan === 'Baru' ? item.jalanKeluar || '' : '';
     item.statusPenanganan = body.statusPenanganan;
     // The PIC may set/revise severity while resolving the case.
     if (body.status !== undefined && body.status !== '') {
@@ -592,3 +601,64 @@ function generateWeeklySummary() {
   } finally { lock.releaseLock(); }
 }
 function jsonResponse(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
+
+
+/** Trusted-server backup endpoints. API key verified and ScriptLock held by doPost. */
+function handleFirebaseBackup(body) {
+  if (body.action === 'backupHealth') return { status: 'success', protocol: 'komplainer-backup-v1', writeLocked: props().getProperty('FIRESTORE_WRITE_LOCK') === 'true' };
+  if (body.action === 'backupMaintenance') { if (typeof body.enabled !== 'boolean') fail('Status maintenance tidak valid.'); props().setProperty('FIRESTORE_WRITE_LOCK', String(body.enabled)); return { status: 'success', writeLocked: body.enabled }; }
+  if (body.action === 'backupExport') {
+    var sourceSheet = body.source === 'backup' ? systemSheet('Firebase Backup', HEADERS) : ensureHeaders(dataSheet());
+    var all = rows(sourceSheet, HEADERS.length).map(report).filter(function (item) { return item.id; });
+    var offset = Number(body.offset || 0);
+    if (!Number.isInteger(offset) || offset < 0) fail('Offset tidak valid.');
+    var selected = all.slice(offset, offset + 25);
+    var auditRows = rows(systemSheet(body.source === 'backup' ? 'Firebase Riwayat' : 'Riwayat', HISTORY_HEADERS), HISTORY_HEADERS.length);
+    return { status: 'success', protocol: 'komplainer-backup-v1', total: all.length, nextOffset: offset + selected.length < all.length ? offset + selected.length : null, data: selected.map(function (item) {
+      delete item.row;
+      return { report: item, history: auditRows.filter(function (row) { return String(row[1]) === item.id; }).map(function (row) { return { id: String(row[0]), reportId: item.id, tanggal: timestamp(row[2]), userId: String(row[3]), nama: clean(row[4]), aksi: clean(row[5]), catatan: clean(row[6]), detail: clean(row[7]) }; }) };
+    }) };
+  }
+  var item = body.report;
+  if (!item || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id) || !Number.isInteger(item.version) || item.version < 1 || !/^[a-f0-9]{64}$/.test(body.eventId || '')) fail('Snapshot backup tidak valid.');
+  var events = systemSheet('Firebase Snapshots', ['ID Peristiwa', 'Komplain ID', 'Versi', 'Tanggal Backup', 'Snapshot JSON']);
+  if (rows(events, 5).some(function (row) { return String(row[0]) === body.eventId; })) return { status: 'success', duplicate: true };
+  var photos = body.photos || [];
+  if (!Array.isArray(photos) || photos.length > MAX_PHOTOS_TOTAL) fail('Data foto backup tidak valid.');
+  var photoSheet = systemSheet('Firebase Foto', ['Storage Path', 'Drive ID', 'Tanggal Backup']);
+  var photoRows = rows(photoSheet, 3);
+  var mapping = {};
+  photoRows.forEach(function (row) { mapping[clean(row[0])] = String(row[1]); });
+  photos.forEach(function (photo) {
+    if (!photo.path || photo.path.indexOf('komplainer/reports/' + item.id + '/') !== 0 || PHOTO_MIME_TYPES.indexOf(photo.mimeType) === -1) fail('Path foto backup tidak valid.');
+    if (mapping[photo.path]) return;
+    var bytes = Utilities.base64Decode(photo.base64);
+    if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) fail('Ukuran foto backup tidak valid.');
+    var file = driveFolder().createFile(Utilities.newBlob(bytes, photo.mimeType, textField(photo.filename, 'Nama file', false, 200) || 'foto.jpg'));
+    mapping[photo.path] = file.getId();
+    photoSheet.appendRow(safeRow([photo.path, file.getId(), nowIso()]));
+  });
+  function photoIds(refs) { return (refs || []).map(function (photo) { var id = photo.legacyDriveId || mapping[photo.path]; if (!id) fail('Backup foto versi sebelumnya belum lengkap. Akan dicoba ulang.', 409); return id; }); }
+  var mirrored = Object.assign({}, item);
+  mirrored.fotoIds = (item.fotoIds || []).concat(photoIds(item.photoRefs));
+  var mirror = systemSheet('Firebase Backup', HEADERS);
+  var prior = rows(mirror, HEADERS.length).map(report).filter(function (row) { return row.id === item.id; })[0];
+  if (!prior || prior.version <= item.version) {
+    var values = [mirrored.id, mirrored.tanggal, mirrored.dokter, mirrored.team, mirrored.tindakan, mirrored.komplain, mirrored.jalanKeluar, mirrored.status || '', mirrored.statusPenanganan, mirrored.picId, mirrored.picNama, mirrored.tenggat, mirrored.pelaporId, mirrored.pelaporNama, mirrored.createdAt, mirrored.updatedAt, mirrored.selesaiPada, mirrored.deletedAt, mirrored.version, mirrored.rumahSakit || '', mirrored.penangananSelanjutnya || '', JSON.stringify(mirrored.fotoIds), mirrored.statusCase || '', mirrored.solusiAwal || ''];
+    mirror.getRange(prior ? prior.row : mirror.getLastRow() + 1, 1, 1, HEADERS.length).setValues([safeRow(values)]);
+  }
+  if (body.history) {
+    var entry = body.history;
+    if (entry.reportId !== item.id || !entry.id) fail('Riwayat backup tidak valid.');
+    var auditSheet = systemSheet('Firebase Riwayat', HISTORY_HEADERS);
+    if (!rows(auditSheet, HISTORY_HEADERS.length).some(function (row) { return String(row[0]) === entry.id; })) {
+      var detail = {}; try { detail = JSON.parse(entry.detail || '{}'); } catch (error) { detail = { legacyDetail: entry.detail }; }
+      if (detail.photoRefs) detail.fotoIds = (detail.fotoIds || []).concat(photoIds(detail.photoRefs));
+      auditSheet.appendRow(safeRow([entry.id, item.id, entry.tanggal, entry.userId || '', entry.nama, entry.aksi, entry.catatan || '', JSON.stringify(detail)]));
+    }
+  }
+  var raw = JSON.stringify(item);
+  if (raw.length > 45000) fail('Snapshot terlalu besar untuk satu sel backup.');
+  events.appendRow(safeRow([body.eventId, item.id, item.version, nowIso(), raw]));
+  return { status: 'success', photoCount: photos.length };
+}

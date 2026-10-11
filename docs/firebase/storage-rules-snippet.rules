@@ -1,0 +1,4 @@
+// Merge inside existing match /b/{bucket}/o; preserve other apps' rules.
+// Images are served by the API after verifying report access.
+// Other permissive wildcard matches MUST NOT grant these paths access.
+match /komplainer/{object=**} { allow read, write: if false; }

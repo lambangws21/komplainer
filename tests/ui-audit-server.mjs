@@ -1,5 +1,5 @@
 // Disposable local UI harness. All report mutations stay in an in-memory Sheet fixture.
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { spawn } from 'node:child_process';
 import { createFixture, fakeKey } from './helpers/apps-script-fixture.mjs';
 import { hashPassword } from '../src/lib/server/password.mjs';
@@ -24,9 +24,22 @@ const mock = createServer(async (req, res) => {
   } catch { res.statusCode = 400; res.end('{}'); }
 });
 await new Promise((resolve) => mock.listen(4105, '127.0.0.1', resolve));
-const app = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', '3105'], { env: { ...process.env, AUTH_PROVIDER: 'sheets', GOOGLE_SCRIPT_URL: 'http://127.0.0.1:4105', GOOGLE_SCRIPT_API_KEY: fakeKey }, stdio: ['ignore', 'pipe', 'pipe'] });
+const app = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', '3106'], { env: { ...process.env, AUTH_PROVIDER: 'sheets', DATA_PROVIDER: 'apps-script', FIREBASE_BACKUP_ENABLED: 'false', GOOGLE_SCRIPT_URL: 'http://127.0.0.1:4105', GOOGLE_SCRIPT_API_KEY: fakeKey }, stdio: ['ignore', 'pipe', 'pipe'] });
 app.stdout.pipe(process.stdout); app.stderr.pipe(process.stderr);
+// These optional Firebase-only notices are empty in the Sheets UI fixture. Keep
+// tests isolated from real Firebase and avoid ending a valid fixture session.
+const frontend = createServer((req, res) => {
+  if (req.method === 'GET' && ['/api/announcements', '/api/mentions'].includes(req.url?.split('?')[0])) {
+    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ status: 'success', data: [] })); return;
+  }
+  const upstream = httpRequest({ hostname: '127.0.0.1', port: 3106, path: req.url, method: req.method, headers: req.headers }, (response) => {
+    res.writeHead(response.statusCode, response.headers); response.pipe(res);
+  });
+  upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end('UI fixture is starting.'); });
+  req.pipe(upstream);
+});
+await new Promise((resolve) => frontend.listen(3105, '127.0.0.1', resolve));
 console.log('Local audit fixture: http://localhost:3105/komplain; admin@example.test / reporter@example.test / pic@example.test. Only disposable local data.');
 let closing = false;
-async function close() { if (closing) return; closing = true; app.kill('SIGTERM'); mock.close(); }
-process.on('SIGTERM', close); process.on('SIGINT', close); app.on('exit', () => { mock.close(); });
+async function close() { if (closing) return; closing = true; app.kill('SIGTERM'); frontend.close(); mock.close(); }
+process.on('SIGTERM', close); process.on('SIGINT', close); app.on('exit', () => { frontend.close(); mock.close(); });

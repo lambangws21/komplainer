@@ -13,7 +13,10 @@
     "test": "node --test tests/*.test.mjs src/app/komplain/weekly-summary.test.mjs src/app/komplain/export.test.mjs",
     "setup:admin": "node scripts/setup-admin.mjs",
     "test:api": "node tests/api-integration.mjs",
-    "test:ui:local": "node tests/ui-audit-server.mjs"
+    "test:ui:local": "node tests/ui-audit-server.mjs",
+    "migrate:firestore": "node --env-file=.env.local scripts/migrate-firestore.mjs",
+    "test:firestore:live": "node --env-file=.env.local tests/firestore-integration.mjs",
+    "backup:sync": "node --env-file=.env.local scripts/sync-firestore-backup.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.0",
@@ -65,6 +68,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.1",
     "sonner": "^2.0.0",
+    "swr": "^2.5.1",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.24.2"

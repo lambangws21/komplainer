@@ -44,3 +44,6 @@ next-env.d.ts
 # Firebase service account private keys
 *firebase-adminsdk*.json
 *service-account*.json
+
+# Private migration source snapshots
+.local-backups/

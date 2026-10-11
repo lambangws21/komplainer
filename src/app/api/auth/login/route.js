@@ -5,14 +5,18 @@ import { ensureFirebaseProfile, firebaseDirectory } from '@/lib/server/firebase-
 import { firebaseEmail } from '@/lib/server/firebase-identity.mjs';
 import { clearSession } from '@/lib/server/apps-script';
 import { createToken, tokenHash, verifyPassword, SESSION_SECONDS } from '@/lib/server/password.mjs';
+import { checkRateLimit, clientIp } from '@/lib/server/rate-limit.mjs';
 
 export const maxDuration = 30;
 export async function POST(request) {
   try {
     assertSameOrigin(request);
+    const ip = clientIp(request);
+    checkRateLimit(`login:ip:${ip}`, 30);
     const body = await readBody(request);
     const identifier = String(body.email || '').trim().toLowerCase();
     if (!identifier || identifier.length > 254 || typeof body.password !== 'string' || body.password.length > 128) throw new ApiError('Email/username atau password tidak valid.');
+    checkRateLimit(`login:id:${ip}:${identifier}`, 8);
     if (usesFirebase()) {
       let email = identifier;
       if (identifier !== 'lambangws' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {

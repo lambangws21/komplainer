@@ -12,7 +12,7 @@ export function profileFromAccount(account) {
   const meta = account.customClaims?.komplainer;
   if (!meta || !['admin', 'pelapor', 'petugas'].includes(meta.role)) return null;
   const approval = meta.approval || 'approved'; // Preserve previously approved accounts.
-  return { id: profileId(account.uid), firebaseUid: account.uid, nama: account.displayName || account.email?.split('@')[0] || 'Pengguna', email: account.email, username: meta.username || null, role: meta.role, unit: meta.unit || 'Belum diisi', approval, active: !account.disabled && meta.active !== false && approval === 'approved', mustChangePassword: meta.mustChangePassword === true };
+  return { id: profileId(account.uid), firebaseUid: account.uid, nama: account.displayName || account.email?.split('@')[0] || 'Pengguna', email: account.email, username: meta.username || null, role: meta.role, unit: meta.unit || 'Belum diisi', approval, active: !account.disabled && meta.active !== false && approval === 'approved', mustChangePassword: meta.mustChangePassword === true, calendarToken: meta.calendarToken || null };
 }
 export function requireApprovedProfile(user) {
   if (!user || user.approval && user.approval !== 'approved') throw new ApiError(user?.approval === 'rejected' ? 'Pendaftaran ditolak. Hubungi admin.' : 'Akun menunggu persetujuan admin.', 403);
