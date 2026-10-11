@@ -4,9 +4,10 @@ const SESSION_COOKIE = 'komplain_session';
 const FIREBASE_COOKIE = 'komplain_firebase_session';
 // firebase-admin needs the Node runtime, so the cookie itself can't be verified here — this only
 // rejects the common "no cookie at all" case at the edge, before a Node function is invoked.
-// '/api/calendar/feed' is deliberately NOT listed here — it's a public, token-gated route that
-// Google/Outlook/Apple Calendar poll directly and can't send our session cookie to.
-const PROTECTED_PREFIXES = ['/api/komplain', '/api/users', '/api/photo', '/api/mentions', '/api/mentionables', '/api/announcements', '/api/backup', '/api/auth/session', '/api/auth/profile', '/api/auth/password', '/api/auth/logout', '/api/schedules', '/api/calendar/token', '/api/calendar/geocode'];
+// The Google OAuth callback is reached via a top-level GET redirect from accounts.google.com;
+// our cookies are sameSite:'lax', which IS sent on top-level GET navigations, so this check
+// still applies there even though the navigation originates off-site.
+const PROTECTED_PREFIXES = ['/api/komplain', '/api/users', '/api/photo', '/api/mentions', '/api/mentionables', '/api/announcements', '/api/backup', '/api/auth/session', '/api/auth/profile', '/api/auth/password', '/api/auth/logout', '/api/schedules', '/api/calendar/geocode', '/api/calendar/google'];
 
 export function middleware(request) {
   const { pathname } = request.nextUrl;

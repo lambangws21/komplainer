@@ -45,5 +45,8 @@ next-env.d.ts
 *firebase-adminsdk*.json
 *service-account*.json
 
+# Google Cloud OAuth client secret downloads (credentials belong in .env.local, not the repo)
+client_secret_*.json
+
 # Private migration source snapshots
 .local-backups/

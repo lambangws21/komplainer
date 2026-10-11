@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { ApiError } from './api-error.mjs';
 import { REPORTS, validId, text, date, canReadReport, validatePhotos } from './firestore-domain.mjs';
 import { firestoreDb, uploadPhotos, cleanupPhotos } from './firestore-store.mjs';
+import { syncEvent } from './google-calendar.mjs';
 
 export const SCHEDULES = 'komplainer_schedules';
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -81,6 +82,8 @@ export async function executeSchedule(action, body, { user, accounts, db = fires
     const photoRefs = await uploadPhotos(incoming, id, 'komplainer/schedules');
     const item = { ...fields, id, photoRefs, createdBy: user.id, createdByNama: user.nama, createdAt: now, updatedAt: now };
     try { await schedules.doc(id).set(item); } catch (error) { await cleanupPhotos(photoRefs); throw error; }
+    const synced = await syncEvent('create', item, db);
+    if (synced.googleEventId) { item.googleEventId = synced.googleEventId; await schedules.doc(id).update({ googleEventId: synced.googleEventId }); }
     return { status: 'success', data: publicSchedule(item) };
   }
   const id = validId(body.id);
@@ -96,9 +99,12 @@ export async function executeSchedule(action, body, { user, accounts, db = fires
     const uploaded = await uploadPhotos(incoming, id, 'komplainer/schedules');
     const item = { ...old, ...fields, photoRefs: [...(old.photoRefs || []), ...uploaded], updatedAt: now };
     try { await ref.set(item); } catch (error) { await cleanupPhotos(uploaded); throw error; }
+    const synced = await syncEvent(item.googleEventId ? 'update' : 'create', item, db);
+    if (synced.googleEventId && synced.googleEventId !== item.googleEventId) { item.googleEventId = synced.googleEventId; await ref.update({ googleEventId: synced.googleEventId }); }
     return { status: 'success', data: publicSchedule(item) };
   }
   if (action === 'delete') {
+    await syncEvent('delete', old, db);
     await ref.delete();
     await cleanupPhotos(old.photoRefs || []);
     return { status: 'success', data: publicSchedule({ ...old, deletedAt: now }) };
