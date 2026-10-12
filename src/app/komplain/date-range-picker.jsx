@@ -17,7 +17,7 @@ const dayPickerClassNames = {
   months: 'flex flex-col',
   month: 'space-y-3',
   caption: 'flex items-center justify-between px-1',
-  caption_label: 'text-sm font-semibold text-white',
+  caption_label: 'text-sm font-semibold text-slate-100',
   nav: 'flex items-center gap-1',
   nav_button: 'inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-30',
   nav_button_previous: '',
@@ -85,7 +85,7 @@ export default function DateRangePicker({ start, end, onApply, onClear, today, c
           }}
         />
         <div className="mt-3 flex flex-wrap gap-1.5">{presetsFor(today).map(([label, presetStart, presetEnd]) => <button key={label} type="button" onClick={() => { setDraftStart(presetStart); setDraftEnd(presetEnd); }} className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800">{label}</button>)}</div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Mulai</p><p className="font-medium text-white">{draftStart ? formatShort(draftStart) : '—'}</p></div><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Selesai</p><p className="font-medium text-white">{draftEnd ? formatShort(draftEnd) : '—'}</p></div></div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Mulai</p><p className="font-medium text-slate-100">{draftStart ? formatShort(draftStart) : '—'}</p></div><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Selesai</p><p className="font-medium text-slate-100">{draftEnd ? formatShort(draftEnd) : '—'}</p></div></div>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={() => { setDraftStart(''); setDraftEnd(''); onClear(); setOpen(false); }} className="flex-1 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-800">Hapus</button>
           <button type="button" disabled={!draftStart || !draftEnd} onClick={() => { onApply(draftStart, draftEnd); setOpen(false); }} className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Terapkan Filter</button>

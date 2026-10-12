@@ -6,7 +6,7 @@ import PasswordInput from './password-input';
 import { apiRequest, postJson } from './api-client.mjs';
 
 const REGISTRATION_UNITS = ['TS', 'Logistik'];
-const input = 'w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-white focus:outline-none focus:ring-2 focus:ring-blue-400';
+const input = 'w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400';
 const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50';
 export function LoginPanel({ onLogin, initialError, notice }) {
   const [register, setRegister] = useState(false);

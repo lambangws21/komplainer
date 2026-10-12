@@ -77,7 +77,7 @@ const FIELD_HINTS = {
   jalanKeluar: 'Boleh dikosongkan jika belum ada penanganan.',
   penangananSelanjutnya: 'Boleh dikosongkan jika belum ada rencana lanjutan.',
 };
-const inputClass = 'min-h-12 min-w-0 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-white placeholder:text-slate-400 read-only:bg-slate-800/50 read-only:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:text-slate-400';
+const inputClass = 'min-h-12 min-w-0 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-slate-100 placeholder:text-slate-400 read-only:bg-slate-800/50 read-only:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:text-slate-400';
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 const today = () => {
   const date = new Date();

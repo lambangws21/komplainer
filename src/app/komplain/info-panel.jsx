@@ -42,8 +42,8 @@ export default function InfoPanel() {
     <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content className={`komplain-theme ${mobileDialog} max-w-lg`}>
       <div className={dialogHeader}><Dialog.Title className="pr-12 text-xl font-bold">Tentang Komplainer</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">Ringkasan fungsi aplikasi dan rencana pengembangan ke depan.</Dialog.Description><Dialog.Close aria-label="Tutup" className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-300 hover:bg-slate-800"><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
       <div className={`${dialogBody} space-y-5 pt-5`}>
-        <section><h3 className="font-semibold text-white">Fungsi aplikasi</h3><ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">{FUNGSI.map((item) => <FeatureItem key={item.text} {...item} />)}</ul></section>
-        <section><h3 className="font-semibold text-white">Rencana ke depan</h3><ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">{RENCANA.map((item) => <FeatureItem key={item.text} {...item} />)}</ul></section>
+        <section><h3 className="font-semibold text-slate-100">Fungsi aplikasi</h3><ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">{FUNGSI.map((item) => <FeatureItem key={item.text} {...item} />)}</ul></section>
+        <section><h3 className="font-semibold text-slate-100">Rencana ke depan</h3><ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">{RENCANA.map((item) => <FeatureItem key={item.text} {...item} />)}</ul></section>
         <button type="button" onClick={share} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-500">{copied ? <><Check aria-hidden="true" className="h-4 w-4" />Tersalin ke clipboard</> : <><Share2 aria-hidden="true" className="h-4 w-4" />Bagikan info aplikasi</>}</button>
       </div>
     </Dialog.Content></Dialog.Portal>

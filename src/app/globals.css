@@ -15,9 +15,13 @@
 }
 
 body {
-  background-color: #020617 !important; /* Slate-950 pekat */
+  background-color: #020617; /* Slate-950 pekat */
   color: #f8fafc;
   margin: 0;
   padding: 0;
   min-height: 100vh;
+}
+html[data-theme='light'] body {
+  background-color: #f8fafc;
+  color: #0f172a;
 }

@@ -4,6 +4,7 @@ import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone } from 
 import RoleBadge from './role-badge';
 import InfoPanel from './info-panel';
 import PushToggle from './push-toggle';
+import ThemeToggle from './theme-toggle';
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -15,6 +16,7 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
       <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Monitoring</p><h1 className="text-xl font-bold sm:text-2xl">Laporan Komplain</h1></div>
       <div className="flex items-center gap-1.5">
+        <ThemeToggle />
         <InfoPanel />
         {showNav && <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild><button aria-label={`Notifikasi laporan baru${unreadCount ? `, ${unreadCount} belum dibuka` : ''}`} className={`${buttonClass} relative border border-slate-700 bg-slate-800 px-2.5`}>

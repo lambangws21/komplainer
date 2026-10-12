@@ -16,7 +16,7 @@ const dayPickerClassNames = {
   months: 'flex flex-col',
   month: 'space-y-3',
   caption: 'flex items-center justify-between px-1',
-  caption_label: 'text-sm font-semibold text-white',
+  caption_label: 'text-sm font-semibold text-slate-100',
   nav: 'flex items-center gap-1',
   nav_button: 'inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-30',
   nav_button_previous: '',

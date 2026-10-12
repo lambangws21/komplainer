@@ -25,6 +25,216 @@
   --raised: #1c4039;
 }
 
+/* Light mode — same role-accent system as above, mirrored for a light canvas. Selectors are
+   qualified with html[data-theme='light'] (set by next-themes on <html>) rather than a
+   data-theme attribute on .komplain-theme itself, so the same rule also reaches <body>. */
+html[data-theme='light'] .komplain-theme {
+  --accent: 2 132 199;
+  --accent-strong: 7 89 133;
+  --canvas: #f8fbff;
+  --surface: #ffffff;
+  --raised: #eef6fc;
+  color-scheme: light;
+}
+
+html[data-theme='light'] .komplain-theme[data-role='admin'] {
+  --accent: 109 40 217;
+  --accent-strong: 91 33 182;
+  --canvas: #faf9ff;
+  --surface: #ffffff;
+  --raised: #f2effa;
+}
+
+html[data-theme='light'] .komplain-theme[data-role='petugas'] {
+  --accent: 5 150 105;
+  --accent-strong: 6 95 70;
+  --canvas: #f6fbf9;
+  --surface: #ffffff;
+  --raised: #eaf6f1;
+}
+
+/* Role-accent-driven classes (mirrors the dark block below) — kept on the --accent variable
+   rather than a fixed hex so the per-role tinting still works in light mode. */
+html[data-theme='light'] .komplain-theme .text-blue-300,
+html[data-theme='light'] .komplain-theme .text-blue-200 { color: rgb(var(--accent)); }
+html[data-theme='light'] .komplain-theme .bg-blue-950\/20 { background-color: rgb(var(--accent) / 0.08); }
+html[data-theme='light'] .komplain-theme .bg-blue-950\/40 { background-color: rgb(var(--accent) / 0.14); }
+html[data-theme='light'] .komplain-theme .border-blue-900\/60 { border-color: rgb(var(--accent) / 0.3); }
+html[data-theme='light'] .komplain-theme .border-blue-900 { border-color: rgb(var(--accent) / 0.35); }
+html[data-theme='light'] .komplain-theme .border-blue-800 { border-color: rgb(var(--accent) / 0.5); }
+
+/* Muted text — same two classes the dark block above tunes by hand (raw Tailwind slate-400/500
+   read fine on the dark canvas but not on white), light-mode equivalents. */
+html[data-theme='light'] .komplain-theme .text-slate-400 { color: #64748b; }
+html[data-theme='light'] .komplain-theme .text-slate-500 { color: #475569; }
+
+/* divide-slate-800 applies its color via Tailwind's child-combinator form, not as its own
+   background/border/color — needs its own selector shape rather than fitting the generated block. */
+html[data-theme='light'] .komplain-theme .divide-slate-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e2e8f0; }
+
+/* The native date-picker icon is dark by default — only needs inverting for the dark canvas. */
+html[data-theme='light'] .komplain-theme input[type='date']::-webkit-calendar-picker-indicator { filter: none; }
+
+/* Generated from the actual class list in src/app/komplain (grep + a 50<->950 shade-flip around
+   the midpoint, e.g. border-blue-800 -> border-blue-200). Solid mid-tone fills (shades 400-600,
+   plus 700 specifically when used as a solid button background) are intentionally left out: they
+   read fine on both canvases already, flipping them to a pastel 300 would make primary buttons
+   look weak in light mode. */
+html[data-theme='light'] .komplain-theme .bg-amber-950 { background-color: #fffbeb; }
+html[data-theme='light'] .komplain-theme .bg-amber-950\/15 { background-color: rgb(255 251 235 / 0.15); }
+html[data-theme='light'] .komplain-theme .bg-amber-950\/20 { background-color: rgb(255 251 235 / 0.2); }
+html[data-theme='light'] .komplain-theme .bg-amber-950\/30 { background-color: rgb(255 251 235 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-amber-950\/40 { background-color: rgb(255 251 235 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-amber-950\/50 { background-color: rgb(255 251 235 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-amber-950\/60 { background-color: rgb(255 251 235 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-blue-950 { background-color: #eff6ff; }
+html[data-theme='light'] .komplain-theme .bg-blue-950\/30 { background-color: rgb(239 246 255 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-blue-950\/50 { background-color: rgb(239 246 255 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-cyan-950\/40 { background-color: rgb(236 254 255 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950 { background-color: #ecfdf5; }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/15 { background-color: rgb(236 253 245 / 0.15); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/20 { background-color: rgb(236 253 245 / 0.2); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/30 { background-color: rgb(236 253 245 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/40 { background-color: rgb(236 253 245 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/50 { background-color: rgb(236 253 245 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/60 { background-color: rgb(236 253 245 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-emerald-950\/70 { background-color: rgb(236 253 245 / 0.7); }
+html[data-theme='light'] .komplain-theme .bg-orange-950\/40 { background-color: rgb(255 247 237 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-pink-950\/40 { background-color: rgb(253 242 248 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-red-900\/60 { background-color: rgb(254 226 226 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-red-950 { background-color: #fef2f2; }
+html[data-theme='light'] .komplain-theme .bg-red-950\/10 { background-color: rgb(254 242 242 / 0.1); }
+html[data-theme='light'] .komplain-theme .bg-red-950\/20 { background-color: rgb(254 242 242 / 0.2); }
+html[data-theme='light'] .komplain-theme .bg-red-950\/30 { background-color: rgb(254 242 242 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-red-950\/40 { background-color: rgb(254 242 242 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-red-950\/60 { background-color: rgb(254 242 242 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-sky-950\/15 { background-color: rgb(240 249 255 / 0.15); }
+html[data-theme='light'] .komplain-theme .bg-sky-950\/60 { background-color: rgb(240 249 255 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-slate-800 { background-color: #e2e8f0; }
+html[data-theme='light'] .komplain-theme .bg-slate-800\/30 { background-color: rgb(226 232 240 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-slate-800\/40 { background-color: rgb(226 232 240 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-slate-800\/50 { background-color: rgb(226 232 240 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-slate-800\/70 { background-color: rgb(226 232 240 / 0.7); }
+html[data-theme='light'] .komplain-theme .bg-slate-800\/80 { background-color: rgb(226 232 240 / 0.8); }
+html[data-theme='light'] .komplain-theme .bg-slate-900 { background-color: #f1f5f9; }
+html[data-theme='light'] .komplain-theme .bg-slate-900\/40 { background-color: rgb(241 245 249 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-slate-900\/50 { background-color: rgb(241 245 249 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-slate-900\/70 { background-color: rgb(241 245 249 / 0.7); }
+html[data-theme='light'] .komplain-theme .bg-slate-900\/90 { background-color: rgb(241 245 249 / 0.9); }
+html[data-theme='light'] .komplain-theme .bg-slate-900\/95 { background-color: rgb(241 245 249 / 0.95); }
+html[data-theme='light'] .komplain-theme .bg-slate-950 { background-color: #f8fafc; }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/10 { background-color: rgb(248 250 252 / 0.1); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/20 { background-color: rgb(248 250 252 / 0.2); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/30 { background-color: rgb(248 250 252 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/40 { background-color: rgb(248 250 252 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/50 { background-color: rgb(248 250 252 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/60 { background-color: rgb(248 250 252 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/70 { background-color: rgb(248 250 252 / 0.7); }
+html[data-theme='light'] .komplain-theme .bg-slate-950\/80 { background-color: rgb(248 250 252 / 0.8); }
+html[data-theme='light'] .komplain-theme .bg-teal-950\/30 { background-color: rgb(240 253 250 / 0.3); }
+html[data-theme='light'] .komplain-theme .bg-teal-950\/40 { background-color: rgb(240 253 250 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-violet-950\/15 { background-color: rgb(245 243 255 / 0.15); }
+html[data-theme='light'] .komplain-theme .bg-violet-950\/20 { background-color: rgb(245 243 255 / 0.2); }
+html[data-theme='light'] .komplain-theme .bg-violet-950\/40 { background-color: rgb(245 243 255 / 0.4); }
+html[data-theme='light'] .komplain-theme .bg-violet-950\/50 { background-color: rgb(245 243 255 / 0.5); }
+html[data-theme='light'] .komplain-theme .bg-violet-950\/60 { background-color: rgb(245 243 255 / 0.6); }
+html[data-theme='light'] .komplain-theme .bg-violet-950\/70 { background-color: rgb(245 243 255 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-amber-700 { border-color: #fcd34d; }
+html[data-theme='light'] .komplain-theme .border-amber-700\/70 { border-color: rgb(252 211 77 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-amber-800 { border-color: #fde68a; }
+html[data-theme='light'] .komplain-theme .border-amber-800\/60 { border-color: rgb(253 230 138 / 0.6); }
+html[data-theme='light'] .komplain-theme .border-amber-800\/70 { border-color: rgb(253 230 138 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-blue-800\/70 { border-color: rgb(191 219 254 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-blue-900\/50 { border-color: rgb(219 234 254 / 0.5); }
+html[data-theme='light'] .komplain-theme .border-cyan-800 { border-color: #a5f3fc; }
+html[data-theme='light'] .komplain-theme .border-emerald-700 { border-color: #6ee7b7; }
+html[data-theme='light'] .komplain-theme .border-emerald-700\/70 { border-color: rgb(110 231 183 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-emerald-800 { border-color: #a7f3d0; }
+html[data-theme='light'] .komplain-theme .border-emerald-800\/50 { border-color: rgb(167 243 208 / 0.5); }
+html[data-theme='light'] .komplain-theme .border-emerald-800\/60 { border-color: rgb(167 243 208 / 0.6); }
+html[data-theme='light'] .komplain-theme .border-emerald-800\/70 { border-color: rgb(167 243 208 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-emerald-900\/50 { border-color: rgb(209 250 229 / 0.5); }
+html[data-theme='light'] .komplain-theme .border-orange-800 { border-color: #fed7aa; }
+html[data-theme='light'] .komplain-theme .border-pink-800 { border-color: #fbcfe8; }
+html[data-theme='light'] .komplain-theme .border-red-800 { border-color: #fecaca; }
+html[data-theme='light'] .komplain-theme .border-red-800\/60 { border-color: rgb(254 202 202 / 0.6); }
+html[data-theme='light'] .komplain-theme .border-red-800\/70 { border-color: rgb(254 202 202 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-red-900 { border-color: #fee2e2; }
+html[data-theme='light'] .komplain-theme .border-red-900\/50 { border-color: rgb(254 226 226 / 0.5); }
+html[data-theme='light'] .komplain-theme .border-red-900\/60 { border-color: rgb(254 226 226 / 0.6); }
+html[data-theme='light'] .komplain-theme .border-red-900\/70 { border-color: rgb(254 226 226 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-sky-700\/70 { border-color: rgb(125 211 252 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-sky-800\/70 { border-color: rgb(186 230 253 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-slate-700 { border-color: #cbd5e1; }
+html[data-theme='light'] .komplain-theme .border-slate-700\/70 { border-color: rgb(203 213 225 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-slate-700\/80 { border-color: rgb(203 213 225 / 0.8); }
+html[data-theme='light'] .komplain-theme .border-slate-800 { border-color: #e2e8f0; }
+html[data-theme='light'] .komplain-theme .border-teal-800 { border-color: #99f6e4; }
+html[data-theme='light'] .komplain-theme .border-teal-800\/60 { border-color: rgb(153 246 228 / 0.6); }
+html[data-theme='light'] .komplain-theme .border-violet-700\/70 { border-color: rgb(196 181 253 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-violet-800 { border-color: #ddd6fe; }
+html[data-theme='light'] .komplain-theme .border-violet-800\/70 { border-color: rgb(221 214 254 / 0.7); }
+html[data-theme='light'] .komplain-theme .border-violet-900\/50 { border-color: rgb(237 233 254 / 0.5); }
+html[data-theme='light'] .komplain-theme .border-violet-900\/60 { border-color: rgb(237 233 254 / 0.6); }
+html[data-theme='light'] .komplain-theme .text-amber-100 { color: #78350f; }
+html[data-theme='light'] .komplain-theme .text-amber-100\/80 { color: rgb(120 53 15 / 0.8); }
+html[data-theme='light'] .komplain-theme .text-amber-200 { color: #92400e; }
+html[data-theme='light'] .komplain-theme .text-amber-300 { color: #b45309; }
+html[data-theme='light'] .komplain-theme .text-amber-50 { color: #451a03; }
+html[data-theme='light'] .komplain-theme .text-amber-50\/90 { color: rgb(69 26 3 / 0.9); }
+html[data-theme='light'] .komplain-theme .text-blue-100 { color: #1e3a8a; }
+html[data-theme='light'] .komplain-theme .text-cyan-300 { color: #0e7490; }
+html[data-theme='light'] .komplain-theme .text-emerald-100 { color: #064e3b; }
+html[data-theme='light'] .komplain-theme .text-emerald-200 { color: #065f46; }
+html[data-theme='light'] .komplain-theme .text-emerald-300 { color: #047857; }
+html[data-theme='light'] .komplain-theme .text-indigo-300 { color: #4338ca; }
+html[data-theme='light'] .komplain-theme .text-orange-300 { color: #c2410c; }
+html[data-theme='light'] .komplain-theme .text-pink-300 { color: #be185d; }
+html[data-theme='light'] .komplain-theme .text-red-200 { color: #991b1b; }
+html[data-theme='light'] .komplain-theme .text-red-300 { color: #b91c1c; }
+html[data-theme='light'] .komplain-theme .text-sky-200 { color: #075985; }
+html[data-theme='light'] .komplain-theme .text-sky-300 { color: #0369a1; }
+html[data-theme='light'] .komplain-theme .text-slate-100,
+html[data-theme='light'] .komplain-theme.text-slate-100 { color: #0f172a; }
+html[data-theme='light'] .komplain-theme .text-slate-200 { color: #1e293b; }
+html[data-theme='light'] .komplain-theme .text-slate-300 { color: #334155; }
+html[data-theme='light'] .komplain-theme .text-teal-100 { color: #134e4a; }
+html[data-theme='light'] .komplain-theme .text-teal-200 { color: #115e59; }
+html[data-theme='light'] .komplain-theme .text-teal-300 { color: #0f766e; }
+html[data-theme='light'] .komplain-theme .text-violet-100 { color: #4c1d95; }
+html[data-theme='light'] .komplain-theme .text-violet-200 { color: #5b21b6; }
+html[data-theme='light'] .komplain-theme .text-violet-300 { color: #6d28d9; }
+
+/* Same generation pass, but for classes with a variant prefix (hover:, focus:, lg:, etc.) — these
+   need their own selector shape (the prefix becomes part of the literal, escaped class name, plus
+   a pseudo-class/pseudo-element, or an @media wrapper for responsive breakpoints like lg:) rather
+   than reusing the plain .bg-slate-900-style selectors above, which don't match a "lg:bg-slate-900"
+   class token at all. */
+@media (min-width: 1024px) { html[data-theme='light'] .komplain-theme .lg\:bg-slate-900 { background-color: #f1f5f9; } }
+@media (min-width: 1024px) { html[data-theme='light'] .komplain-theme .lg\:bg-slate-900\/50 { background-color: rgb(241 245 249 / 0.5); } }
+@media (min-width: 1024px) { html[data-theme='light'] .komplain-theme .lg\:border-slate-800 { border-color: #e2e8f0; } }
+html[data-theme='light'] .komplain-theme .disabled\:text-slate-400:disabled { color: #64748b; }
+html[data-theme='light'] .komplain-theme .focus\:bg-red-950\/40:focus { background-color: rgb(254 242 242 / 0.4); }
+html[data-theme='light'] .komplain-theme .focus\:bg-slate-800:focus { background-color: #e2e8f0; }
+html[data-theme='light'] .komplain-theme .hover\:bg-blue-950\/40:hover { background-color: rgb(239 246 255 / 0.4); }
+html[data-theme='light'] .komplain-theme .hover\:bg-red-900\/60:hover { background-color: rgb(254 226 226 / 0.6); }
+html[data-theme='light'] .komplain-theme .hover\:bg-red-950\/30:hover { background-color: rgb(254 242 242 / 0.3); }
+html[data-theme='light'] .komplain-theme .hover\:bg-red-950\/40:hover { background-color: rgb(254 242 242 / 0.4); }
+html[data-theme='light'] .komplain-theme .hover\:bg-slate-700:hover { background-color: #cbd5e1; }
+html[data-theme='light'] .komplain-theme .hover\:bg-slate-800:hover { background-color: #e2e8f0; }
+html[data-theme='light'] .komplain-theme .hover\:bg-slate-800\/40:hover { background-color: rgb(226 232 240 / 0.4); }
+html[data-theme='light'] .komplain-theme .hover\:bg-slate-800\/50:hover { background-color: rgb(226 232 240 / 0.5); }
+html[data-theme='light'] .komplain-theme .hover\:bg-violet-950\/40:hover { background-color: rgb(245 243 255 / 0.4); }
+html[data-theme='light'] .komplain-theme .hover\:text-blue-200:hover { color: #1e40af; }
+html[data-theme='light'] .komplain-theme .hover\:text-blue-300:hover { color: #1d4ed8; }
+html[data-theme='light'] .komplain-theme .hover\:text-red-200:hover { color: #991b1b; }
+html[data-theme='light'] .komplain-theme .hover\:text-red-300:hover { color: #b91c1c; }
+html[data-theme='light'] .komplain-theme .hover\:text-slate-200:hover { color: #1e293b; }
+html[data-theme='light'] .komplain-theme .placeholder\:text-slate-400::placeholder { color: #64748b; }
+html[data-theme='light'] .komplain-theme .placeholder\:text-slate-500::placeholder { color: #475569; }
+html[data-theme='light'] .komplain-theme .read-only\:bg-slate-800\/50:read-only { background-color: rgb(226 232 240 / 0.5); }
+html[data-theme='light'] .komplain-theme .read-only\:text-slate-400:read-only { color: #64748b; }
+
 main.komplain-theme {
   background: radial-gradient(ellipse at 0% 0%, rgb(var(--accent) / 0.12), transparent 55%),
     radial-gradient(ellipse at 100% 35%, rgb(var(--accent) / 0.06), transparent 50%), var(--canvas);
