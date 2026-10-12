@@ -16,7 +16,9 @@ const BIAS = { lat: -6.2, lon: 106.8, zoom: 8 };
 
 export async function GET(request) {
   try {
-    if (usesFirebase()) await currentFirebaseUser(); else await callScript('session');
+    const user = usesFirebase() ? await currentFirebaseUser() : (await callScript('session')).user;
+    // Jadwal & Agenda is admin-only while in development — open to petugas/pelapor once stable.
+    if (user.role !== 'admin') throw new ApiError('Fitur jadwal masih tahap pengembangan, baru tersedia untuk admin.', 403);
     const q = (new URL(request.url).searchParams.get('q') || '').trim();
     if (q.length > 200) throw new ApiError('Pencarian lokasi terlalu panjang.');
     if (q.length < 3) return json({ status: 'success', data: [] });

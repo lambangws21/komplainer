@@ -68,6 +68,8 @@ export async function allowedSchedulePhoto(scheduleId, user, path, db = firestor
 
 export async function executeSchedule(action, body, { user, accounts, db = firestoreDb() }) {
   if (!user?.active || user.approval && user.approval !== 'approved' || user.mustChangePassword) throw new ApiError('Akun tidak diizinkan mengakses jadwal.', 403);
+  // Jadwal & Agenda is admin-only while in development — open to petugas/pelapor once stable.
+  if (user.role !== 'admin') throw new ApiError('Fitur jadwal masih tahap pengembangan, baru tersedia untuk admin.', 403);
   const schedules = db.collection(SCHEDULES);
   if (action === 'list') {
     const snapshot = await schedules.get();

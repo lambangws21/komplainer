@@ -3,10 +3,11 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone } from 'lucide-react';
 import RoleBadge from './role-badge';
 import InfoPanel from './info-panel';
+import PushToggle from './push-toggle';
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, announcementCount = 0, onToggleAnnouncements }) {
+export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, announcementCount = 0, onToggleAnnouncements }) {
   const showNav = user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
   const tabs = [['form', 'Beranda'], ['table', 'Laporan'], ...(user?.role === 'admin' ? [['users', 'Pengguna']] : [])];
   const unreadCount = unreadItems.length;
@@ -40,6 +41,8 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
             <div className="px-3 py-2"><p className="break-words text-sm font-semibold">{user.nama}</p><p className="break-words text-xs text-slate-400">{user.email}</p><div className="mt-2 flex items-center gap-2"><RoleBadge role={user.role} /><span className="text-xs text-slate-400">{user.unit}</span></div></div>
             <DropdownMenu.Separator className="my-2 h-px bg-slate-800" />
             {showNav && <DropdownMenu.Item onSelect={() => setTab('account')} className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800 ${tab === 'account' ? 'bg-slate-800' : ''}`}><UserCog aria-hidden="true" className="h-4 w-4" />Akun saya</DropdownMenu.Item>}
+            {showNav && <PushToggle onExpired={onExpired} />}
+            <DropdownMenu.Separator className="my-2 h-px bg-slate-800" />
             <DropdownMenu.Item disabled={loggingOut || busy} onSelect={onLogout} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-300 outline-none hover:bg-red-950/40 focus:bg-red-950/40 data-[disabled]:opacity-50"><LogOut aria-hidden="true" className="h-4 w-4" />{loggingOut ? 'Keluar…' : 'Keluar'}</DropdownMenu.Item>
           </DropdownMenu.Content></DropdownMenu.Portal>
         </DropdownMenu.Root>}

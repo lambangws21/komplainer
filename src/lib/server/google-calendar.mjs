@@ -71,6 +71,51 @@ export function subscribeUrl(calendarId) {
   return `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
 }
 
+function calendarClientFromConfig(config) {
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_OAUTH_CLIENT_ID, process.env.GOOGLE_OAUTH_CLIENT_SECRET);
+  auth.setCredentials({ refresh_token: config.refreshToken });
+  return google.calendar({ version: 'v3', auth });
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Looked up by the ACL rule's actual scope.value rather than guessing the ruleId prefix
+// (`group:<email>` vs `user:<email>`) — Google silently files an email that isn't a real,
+// already-existing Google Group under `user` instead of `group`, so the prefix isn't reliable.
+async function removeAclByEmail(calendar, calendarId, email) {
+  const { data } = await calendar.acl.list({ calendarId });
+  const rule = (data.items || []).find((item) => item.scope?.value === email);
+  if (rule) await calendar.acl.delete({ calendarId, ruleId: rule.id }).catch(() => { /* already gone */ });
+}
+
+// Shares the shared calendar (reader-only — all create/edit/delete stays in-app, see
+// syncEvent()) with a Google Group, so every member sees it natively in their own Google
+// Calendar without subscribing to the .ics link. The group itself must already exist — it's
+// created and its membership is managed at groups.google.com, outside this app's reach (no
+// Workspace Admin SDK access for a plain Gmail account). Re-sharing with a new group replaces
+// the old one; the public .ics link (subscribeUrl) keeps working independently of this.
+export async function shareWithGroup(groupEmail, db = firestoreDb()) {
+  const email = String(groupEmail || '').trim().toLowerCase();
+  if (!EMAIL.test(email)) throw new ApiError('Email Google Group tidak valid.');
+  const config = await loadConfig(db);
+  if (!config?.calendarId) throw new ApiError('Google Calendar belum terhubung.', 503);
+  const calendar = calendarClientFromConfig(config);
+  if (config.groupEmail && config.groupEmail !== email) await removeAclByEmail(calendar, config.calendarId, config.groupEmail);
+  await step('Bagikan ke Google Group', () => calendar.acl.insert({ calendarId: config.calendarId, requestBody: { role: 'reader', scope: { type: 'group', value: email } } }));
+  await saveConfig({ ...config, groupEmail: email }, db);
+  return { groupEmail: email };
+}
+
+export async function unshareGroup(db = firestoreDb()) {
+  const config = await loadConfig(db);
+  if (!config?.calendarId || !config.groupEmail) return;
+  const calendar = calendarClientFromConfig(config);
+  await removeAclByEmail(calendar, config.calendarId, config.groupEmail);
+  const rest = { ...config };
+  delete rest.groupEmail;
+  await saveConfig(rest, db);
+}
+
 // Pure mapping, no network — kept separate from syncEvent() so it's unit-testable without
 // live Google credentials.
 export function scheduleToEventBody(schedule) {
@@ -90,9 +135,7 @@ export async function syncEvent(action, schedule, db = firestoreDb()) {
   try {
     const config = await loadConfig(db);
     if (!config?.refreshToken || !config.calendarId) return { synced: false };
-    const auth = new google.auth.OAuth2(process.env.GOOGLE_OAUTH_CLIENT_ID, process.env.GOOGLE_OAUTH_CLIENT_SECRET);
-    auth.setCredentials({ refresh_token: config.refreshToken });
-    const calendar = google.calendar({ version: 'v3', auth });
+    const calendar = calendarClientFromConfig(config);
     if (action === 'delete') {
       if (!schedule.googleEventId) return { synced: false };
       await calendar.events.delete({ calendarId: config.calendarId, eventId: schedule.googleEventId }).catch((error) => { if (error.code !== 404 && error.code !== 410) throw error; });

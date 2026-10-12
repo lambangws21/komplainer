@@ -19,3 +19,24 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
   }
 });
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* Non-JSON payload is ignored, not fatal. */ }
+  const title = data.title || 'Komplainer';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || '',
+    icon: '/icons/komplain-192.png',
+    badge: '/icons/komplain-192.png',
+    data: { url: data.url || '/komplain' },
+  }));
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/komplain';
+  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    const existing = windowClients.find((client) => new URL(client.url).pathname === url);
+    if (existing) return existing.focus();
+    return clients.openWindow(url);
+  }));
+});

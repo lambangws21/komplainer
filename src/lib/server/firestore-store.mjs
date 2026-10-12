@@ -73,7 +73,7 @@ export async function executeFirestore(action, body, { user, accounts, db = fire
     });
     committed = !result.duplicate;
     if (!committed) await cleanup(uploaded);
-    return { status: 'success', data: publicReport(result.item, accounts), id, ...(result.jobId ? { backupJobId: result.jobId } : {}) };
+    return { status: 'success', data: publicReport(result.item, accounts), id, action, mentions: result.mentions || [], ...(result.jobId ? { backupJobId: result.jobId } : {}) };
   } catch (error) {
     if (!committed) await cleanup(uploaded);
     throw error;
