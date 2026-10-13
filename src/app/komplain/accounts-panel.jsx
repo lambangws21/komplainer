@@ -5,7 +5,7 @@ import { apiRequest, postJson } from './api-client.mjs';
 import LoadingState from './loading-state';
 import RoleBadge, { roleCardStyle } from './role-badge';
 import PasswordInput from './password-input';
-import { ROLE_LABELS } from './workflow.mjs';
+import { ROLE_LABELS, handlingStatus } from './workflow.mjs';
 const input = 'w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400';
 const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50';
 const blank = { nama: '', email: '', username: '', role: 'pelapor', unit: '', password: '', active: true };
@@ -15,7 +15,7 @@ function statusLabel(user) {
 function statusClass(user) {
   return user.approval === 'pending' ? 'bg-amber-950 text-amber-200' : user.approval === 'rejected' ? 'bg-red-950 text-red-200' : user.active ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-800 text-slate-400';
 }
-export default function AccountsPanel({ currentUser, onExpired }) {
+export default function AccountsPanel({ currentUser, onExpired, reports = [] }) {
   const [users, setUsers] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -64,6 +64,27 @@ export default function AccountsPanel({ currentUser, onExpired }) {
     return users.filter((user) => (filter !== 'pending' || user.approval === 'pending') && (roleFilter === 'Semua' || user.role === roleFilter) && ['nama', 'email', 'username', 'unit'].some((key) => String(user[key] || '').toLocaleLowerCase('id-ID').includes(query)))
       .sort((a, b) => Number(b.approval === 'pending') - Number(a.approval === 'pending'));
   }, [users, filter, roleFilter, search]);
+  // Laporan selesai/aktif per pengguna — PIC dihitung dari laporan yang ditanganinya, pelapor
+  // dari laporan yang ia buat sendiri (dedup lewat Set supaya pelapor yang jadi PIC kasusnya
+  // sendiri tidak terhitung dobel), supaya admin bisa lihat beban & kontribusi tiap akun.
+  const reportStats = useMemo(() => {
+    const stats = new Map();
+    for (const item of reports) {
+      const done = handlingStatus(item) === 'Selesai';
+      for (const id of new Set([item.picId, item.pelaporId].filter(Boolean))) {
+        const entry = stats.get(id) || { completed: 0, active: 0 };
+        if (done) entry.completed++; else entry.active++;
+        stats.set(id, entry);
+      }
+    }
+    return stats;
+  }, [reports]);
+  const reportStatsLine = (user) => {
+    if (!['petugas', 'pelapor'].includes(user.role)) return null;
+    const stats = reportStats.get(user.id);
+    if (!stats || !stats.completed && !stats.active) return <p className="mt-1 text-xs text-slate-500">Belum ada laporan</p>;
+    return <p className="mt-1 text-xs text-slate-400"><span className="text-emerald-300">{stats.completed} selesai</span>{stats.active > 0 && <> · <span className="text-amber-300">{stats.active} aktif</span></>}</p>;
+  };
   const actionsFor = (user) => ['pending', 'rejected'].includes(user.approval)
     ? <><button disabled={busy} onClick={() => decide(user, 'approveUser')} className={`${button} bg-emerald-700`}>Setujui</button>{user.approval === 'pending' && <button disabled={busy} onClick={() => decide(user, 'rejectUser')} className={`${button} bg-red-950 text-red-200`}>Tolak</button>}</>
     : <><button disabled={busy} aria-label={`Edit akun ${user.nama}`} onClick={() => open('updateUser', user)} className={`${button} bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4" />Edit</button><button disabled={busy} aria-label={`Reset password ${user.nama}`} onClick={() => open('resetPassword', user)} className={`${button} bg-slate-800`}><KeyRound aria-hidden="true" className="h-4 w-4" />Reset</button></>;
@@ -84,11 +105,11 @@ export default function AccountsPanel({ currentUser, onExpired }) {
     {shownUsers.length > 0 && <div tabIndex={0} role="region" aria-label="Daftar pengguna" className="hidden max-h-[640px] overflow-auto rounded-2xl border border-slate-800 bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 lg:block">
       <table className="w-full min-w-[960px] lg:min-w-0 table-fixed text-left text-sm"><caption className="sr-only">Daftar akun, peran, team, status, dan tindakan Admin. Pendaftaran yang menunggu persetujuan ditampilkan terlebih dahulu.</caption><thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wider text-slate-400"><tr>{[['Pengguna', 'w-[34%]'], ['Peran / Team', 'w-[23%]'], ['Status akun', 'w-[21%]'], ['Aksi', 'w-[22%]']].map(([label, width]) => <th key={label} scope="col" className={`px-5 py-4 font-medium ${width}`}>{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{shownUsers.map((user) => <tr key={user.id} className="transition-colors hover:bg-slate-800/40">
         <td className="px-5 py-4 align-middle"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-800 font-semibold text-slate-300">{(user.nama || '?').trim().slice(0, 2).toUpperCase()}</span><div className="min-w-0"><p className="break-words font-semibold">{user.nama}{user.id === currentUser.id && <span className="ml-2 text-xs font-normal text-blue-300">Anda</span>}</p><p className="mt-1 break-all text-xs text-slate-400">{user.email}</p><p className="mt-1 break-all text-xs text-slate-500">{user.username ? `@${user.username}` : 'Username belum diatur'}</p></div></div></td>
-        <td className="px-5 py-4 align-middle"><RoleBadge role={user.role} /><p className="mt-2 break-words text-xs text-slate-400">{user.unit || 'Team belum diisi'}</p></td>
+        <td className="px-5 py-4 align-middle"><RoleBadge role={user.role} /><p className="mt-2 break-words text-xs text-slate-400">{user.unit || 'Team belum diisi'}</p>{reportStatsLine(user)}</td>
         <td className="px-5 py-4 align-middle"><span className={`inline-flex rounded-full px-3 py-1 text-xs ${statusClass(user)}`}>{statusLabel(user)}</span>{user.mustChangePassword && <p className="mt-2 text-xs text-amber-300">Wajib ganti password</p>}</td>
         <td className="px-4 py-4 align-middle"><div className="flex flex-wrap gap-2">{actionsFor(user)}</div></td>
       </tr>)}</tbody></table>
     </div>}
-    {shownUsers.length > 0 && <div className="grid gap-3 lg:hidden">{shownUsers.map((user) => <article key={user.id} className={`rounded-2xl border p-5 ${roleCardStyle(user.role)}`}><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="break-words font-semibold">{user.nama}{user.id === currentUser.id ? ' (Anda)' : ''}</h3><span className={`rounded-full px-3 py-1 text-xs ${statusClass(user)}`}>{statusLabel(user)}</span></div><p className="mt-2 break-words text-sm text-slate-400">{user.email}{user.username ? ` · @${user.username}` : ''}</p><p className="mt-1 break-words text-sm text-slate-300"><RoleBadge role={user.role} /> <span className="ml-2">{user.unit}</span></p>{user.mustChangePassword && <p className="mt-2 text-xs text-amber-300">Wajib mengganti password sementara</p>}<div className="mt-4 flex flex-wrap gap-2">{actionsFor(user)}</div></article>)}</div>}
+    {shownUsers.length > 0 && <div className="grid gap-3 lg:hidden">{shownUsers.map((user) => <article key={user.id} className={`rounded-2xl border p-5 ${roleCardStyle(user.role)}`}><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="break-words font-semibold">{user.nama}{user.id === currentUser.id ? ' (Anda)' : ''}</h3><span className={`rounded-full px-3 py-1 text-xs ${statusClass(user)}`}>{statusLabel(user)}</span></div><p className="mt-2 break-words text-sm text-slate-400">{user.email}{user.username ? ` · @${user.username}` : ''}</p><p className="mt-1 break-words text-sm text-slate-300"><RoleBadge role={user.role} /> <span className="ml-2">{user.unit}</span></p>{reportStatsLine(user)}{user.mustChangePassword &&<p className="mt-2 text-xs text-amber-300">Wajib mengganti password sementara</p>}<div className="mt-4 flex flex-wrap gap-2">{actionsFor(user)}</div></article>)}</div>}
   </section>;
 }

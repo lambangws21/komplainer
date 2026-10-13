@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { DayPicker } from 'react-day-picker';
+import { id } from 'date-fns/locale';
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
 import { shiftDate, shiftMonth, monthStart, monthEnd } from './weekly-summary.mjs';
 
@@ -75,6 +76,7 @@ export default function DateRangePicker({ start, end, onApply, onClear, today, c
       <Popover.Content data-komplain-popover align="start" sideOffset={8} className="komplain-theme z-[70] w-[min(22rem,90vw)] rounded-2xl border border-slate-700 bg-slate-900 p-3 shadow-2xl">
         <DayPicker
           mode="range"
+          locale={id}
           selected={selectedRange}
           defaultMonth={selectedRange.from || fromKey(today)}
           onSelect={(range) => { setDraftStart(range?.from ? toKey(range.from) : ''); setDraftEnd(range?.to ? toKey(range.to) : ''); }}

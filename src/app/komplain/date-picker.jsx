@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { DayPicker } from 'react-day-picker';
+import { id as idLocale } from 'date-fns/locale';
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 const toKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -48,6 +49,7 @@ export default function DatePicker({ id, value, onChange, placeholder = 'Pilih t
       <Popover.Content data-komplain-popover align="start" sideOffset={8} className="komplain-theme z-[70] rounded-2xl border border-slate-700 bg-slate-900 p-3 shadow-2xl">
         <DayPicker
           mode="single"
+          locale={idLocale}
           selected={selected}
           defaultMonth={selected}
           onSelect={(date) => { if (date) { onChange(toKey(date)); setOpen(false); } }}

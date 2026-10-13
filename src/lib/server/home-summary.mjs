@@ -2,6 +2,10 @@ import 'server-only';
 import { callReports } from './report-service';
 import { handlingStatus } from '@/app/komplain/workflow.mjs';
 
+// Reports untouched this long (no update, still open) surface as an SLA/aging widget on the
+// admin Beranda — a quick worklist of what's stalled, not just what's newly waiting on someone.
+const STALE_MS = 3 * 24 * 60 * 60 * 1000;
+
 // Mirrors the Beranda's own/active/attention/waiting/completed split (previously recomputed
 // client-side from the full report list on every render) so the Beranda can fetch a small,
 // purpose-built payload instead of the entire list used by the Table/Recap tabs.
@@ -16,10 +20,16 @@ export async function reportSummary(user, { cursor = 0, limit = 3 } = {}) {
   const displayed = new Set(priority.map((item) => item.id));
   const rest = own.filter((item) => !displayed.has(item.id)).sort((a, b) => String(b.createdAt || b.tanggal || '').localeCompare(String(a.createdAt || a.tanggal || '')));
   const page = rest.slice(cursor, cursor + limit);
+  const now = Date.now();
+  const stale = user.role !== 'admin' ? [] : active
+    .filter((item) => now - new Date(item.updatedAt || item.createdAt || 0).getTime() > STALE_MS)
+    .sort((a, b) => String(a.updatedAt || a.createdAt || '').localeCompare(String(b.updatedAt || b.createdAt || '')))
+    .slice(0, 5);
   return {
     status: 'success',
     counts: { own: own.length, active: active.length, attention: attention.length, waiting: waiting.length, completed: completed.length },
     attention: priority,
+    stale,
     latest: { items: page, nextCursor: cursor + limit < rest.length ? cursor + limit : null, total: rest.length },
   };
 }

@@ -1,9 +1,11 @@
 'use client';
-import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera } from 'lucide-react';
+import { useState } from 'react';
+import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff } from 'lucide-react';
 import WorkflowBadge from './workflow-badge';
 import { InlineText } from './formatted-text';
 import { handlingStatus, canFollowUp } from './workflow.mjs';
 import GoogleCalendarStatus from './google-calendar-status';
+import MiniCalendar from './mini-calendar';
 
 const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50';
 function MetaBadge({ icon: Icon, children, emphasis = false }) {
@@ -16,6 +18,11 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
   const latest = summary?.latest?.items || [];
   const schedulesLoaded = !schedulesLoading && !!schedules;
   const upcoming = schedules || [];
+  const stale = summary?.stale || [];
+  const daysSince = (value) => Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 86400000));
+  const [staleOpen, setStaleOpen] = useState(true);
+  const [staleShowAll, setStaleShowAll] = useState(false);
+  const staleShown = staleShowAll ? stale : stale.slice(0, 3);
   // Jadwal & Agenda is admin-only while in development (server-side enforced too, in
   // executeSchedule()) — petugas/pelapor don't even see the entry points for it yet.
   const isAdmin = user.role === 'admin';
@@ -25,8 +32,10 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
     <div className="mt-3 space-y-2">{actionable && <p className="break-words text-xs text-slate-400">{!item.picId ? 'Perlu penanggung jawab' : 'Menunggu tindak lanjut Anda'}</p>}<div className="flex flex-wrap gap-2">{isAdmin && <button disabled={busy} onClick={() => onScheduleReport(item)} className={`${button} bg-slate-800/70 text-slate-300`}><CalendarPlus aria-hidden="true" className="h-4 w-4" />{actionable ? 'Jadwalkan Tindakan' : 'Jadwalkan'}</button>}<button disabled={busy} onClick={() => actionable && user.role === 'admin' && !item.picId ? onAssign(item) : actionable && canFollowUp(item, user) ? onFollowUp(item) : onOpen(item)} className={`${button} bg-slate-800 text-blue-300`}>{actionable && user.role === 'admin' && !item.picId ? 'Tentukan PIC' : actionable && canFollowUp(item, user) ? 'Tangani komplain' : handlingStatus(item) === 'Selesai' ? 'Lihat penyelesaian' : 'Lihat detail'}<ChevronRight aria-hidden="true" className="h-4 w-4" /></button></div></div>
   </div>)}</div>}</section>;
   const showAttention = !loaded || attention.length > 0;
-  const columns = (showAttention ? 1 : 0) + 1 + (isAdmin ? 1 : 0);
-  const gridColsClass = { 1: '', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3' }[columns];
+  // Jadwal & Agenda now lives in its own right-hand rail (narrower, sticky) instead of competing
+  // as an equal-width third column — that freed the attention/latest columns to use the extra
+  // width the admin sidebar layout makes available.
+  const mainGridColsClass = showAttention ? 'lg:grid-cols-2' : '';
   return <div className="space-y-6">
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5 lg:p-6">
       <p className="text-sm text-slate-400">Halo, {user.nama || 'selamat datang'}</p>
@@ -44,17 +53,32 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
         ['Selesai', counts.completed, 'Penanganan telah diselesaikan', CheckCircle2, 'text-emerald-300', false],
       ].map(([label, count, hint, Icon, color, primary]) => <div key={label} className={`min-w-0 rounded-2xl border bg-slate-900/70 p-4 sm:p-5 ${primary ? 'border-slate-700' : 'border-slate-800'}`}><div className="flex items-center justify-between gap-2"><p className="text-sm text-slate-400">{label}</p><Icon aria-hidden="true" className={`h-5 w-5 shrink-0 ${color}`} /></div><p className={`mt-3 text-2xl font-semibold tabular-nums sm:mt-4 sm:text-3xl ${color}`}>{loaded ? count : '—'}</p><p className="mt-2 hidden text-xs leading-5 text-slate-400 sm:block">{hint}</p></div>)}
     </div>
-    <div className={`grid items-start gap-6 ${gridColsClass}`}>
-      {showAttention && <div className="min-w-0 space-y-3">{openSection('Perlu tindakan Anda', attention, true)}{loaded && counts.attention > attention.length && <p className="text-xs text-slate-400">Menampilkan {attention.length} dari {counts.attention} laporan. Lihat daftar laporan untuk lainnya.</p>}</div>}
-      <div className="min-w-0 space-y-3">
-        {openSection(user.role === 'admin' ? 'Laporan terbaru' : 'Laporan saya terbaru', latest)}
-        {hasMoreLatest && <button disabled={loadingMoreLatest} onClick={onLoadMoreLatest} className={`${button} w-full bg-slate-800/70 text-slate-300`}>{loadingMoreLatest ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <ChevronDown aria-hidden="true" className="h-4 w-4" />}{loadingMoreLatest ? 'Memuat…' : 'Muat lebih banyak'}</button>}
+    {isAdmin && <section aria-label="Laporan terlambat" className={`rounded-2xl border p-4 sm:p-5 ${loaded && stale.length > 0 ? 'border-amber-800/60 bg-amber-950/20' : 'border-slate-800 bg-slate-900/50'}`}>
+      <button type="button" onClick={() => setStaleOpen((value) => !value)} aria-expanded={staleOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+        <span className="flex items-center gap-2"><AlarmClockOff aria-hidden="true" className={`h-5 w-5 shrink-0 ${loaded && stale.length > 0 ? 'text-amber-300' : 'text-slate-400'}`} /><h3 className="font-semibold">Laporan Terlambat{loaded ? ` (${stale.length})` : ''}</h3></span>
+        <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${staleOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {staleOpen && (!loaded ? <p className="mt-2 text-sm text-slate-400">Menunggu data laporan…</p> : !stale.length ? <p className="mt-2 text-sm text-slate-400">Tidak ada laporan yang mangkrak lebih dari 3 hari.</p> : <>
+        <ol className="mt-3 divide-y divide-amber-900/40 overflow-hidden rounded-xl border border-amber-900/40">{staleShown.map((item, index) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 bg-slate-950/30 p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium"><span className="text-amber-400">{index + 1}.</span> {item.dokter || 'Dokter belum diisi'} · {item.rumahSakit || 'RS belum diisi'}</p><p className="mt-0.5 text-xs text-amber-300">{daysSince(item.updatedAt)} hari tanpa pembaruan · {item.picNama ? `PIC: ${item.picNama}` : 'Belum ditugaskan'}</p></div><button disabled={busy} onClick={() => !item.picId ? onAssign(item) : onFollowUp(item)} className={`${button} shrink-0 bg-slate-800 text-blue-300`}>{!item.picId ? 'Tentukan PIC' : 'Tindak lanjuti'}<ChevronRight aria-hidden="true" className="h-4 w-4" /></button></li>)}</ol>
+        {stale.length > 3 && <button type="button" onClick={() => setStaleShowAll((value) => !value)} className="mt-2 text-xs font-semibold text-amber-300 hover:underline">{staleShowAll ? '− Tampilkan lebih sedikit' : `+ Lihat ${stale.length - 3} laporan terlambat lainnya`}</button>}
+      </>)}
+    </section>}
+    <div className="flex flex-col items-start gap-6 lg:flex-row">
+      <div className={`grid min-w-0 flex-1 items-start gap-6 ${mainGridColsClass}`}>
+        {showAttention && <div className="min-w-0 space-y-3">{openSection('Perlu tindakan Anda', attention, true)}{loaded && counts.attention > attention.length && <p className="text-xs text-slate-400">Menampilkan {attention.length} dari {counts.attention} laporan. Lihat daftar laporan untuk lainnya.</p>}</div>}
+        <div className="min-w-0 space-y-3">
+          {openSection(user.role === 'admin' ? 'Laporan terbaru' : 'Laporan saya terbaru', latest)}
+          {hasMoreLatest && <button disabled={loadingMoreLatest} onClick={onLoadMoreLatest} className={`${button} w-full bg-slate-800/70 text-slate-300`}>{loadingMoreLatest ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <ChevronDown aria-hidden="true" className="h-4 w-4" />}{loadingMoreLatest ? 'Memuat…' : 'Muat lebih banyak'}</button>}
+        </div>
       </div>
-      {isAdmin && <section className="min-w-0 space-y-3 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-5" aria-label="Jadwal & Agenda">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Jadwal & Agenda</h3><div className="flex flex-wrap gap-2"><GoogleCalendarStatus isAdmin={isAdmin} onExpired={onExpired} /><button disabled={busy} onClick={onCreateSchedule} className={`${button} bg-slate-800 text-blue-300`}><CalendarPlus aria-hidden="true" className="h-4 w-4" />Buat Acara</button></div></div>
-        <p className="text-xs text-slate-400">Hubungkan Google Calendar sekali, lalu jadwal di sini otomatis tersinkron.</p>
-        {!schedulesLoaded ? <p className="text-sm text-slate-400">Menunggu data jadwal…</p> : !upcoming.length ? <p className="flex items-start gap-2 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400"><CalendarDays aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />Tidak ada jadwal mendatang. Klik &quot;Jadwalkan&quot; pada laporan, atau &quot;Buat Acara&quot; di atas.</p> : <div className="divide-y divide-slate-800 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">{upcoming.map((item) => <button key={item.id} disabled={busy} onClick={() => onEditSchedule(item)} className="block w-full p-4 text-left hover:bg-slate-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-inset"><div className="flex items-center gap-1.5 text-xs text-slate-400"><CalendarClock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{item.date} · {item.startTime}–{item.endTime}</div><p className="mt-1 break-words text-sm font-semibold">{item.title}</p>{(item.picNama || item.location || item.fotoUrls?.length > 0) && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{item.picNama && <MetaBadge icon={UserRound}>{item.picNama}</MetaBadge>}{item.location && <MetaBadge icon={MapPin}>{item.location}</MetaBadge>}{item.fotoUrls?.length > 0 && <MetaBadge icon={Camera}>{item.fotoUrls.length}</MetaBadge>}</div>}</button>)}</div>}
-      </section>}
+      {isAdmin && <div className="w-full min-w-0 space-y-6 lg:sticky lg:top-20 lg:w-80 lg:shrink-0">
+        <section id="jadwal-agenda" className="space-y-3 scroll-mt-24 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-5" aria-label="Jadwal & Agenda">
+          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Jadwal & Agenda</h3><div className="flex flex-wrap gap-2"><GoogleCalendarStatus isAdmin={isAdmin} onExpired={onExpired} /><button disabled={busy} onClick={onCreateSchedule} className={`${button} bg-slate-800 text-blue-300`}><CalendarPlus aria-hidden="true" className="h-4 w-4" />Buat Acara</button></div></div>
+          <p className="text-xs text-slate-400">Hubungkan Google Calendar sekali, lalu jadwal di sini otomatis tersinkron.</p>
+          {!schedulesLoaded ? <p className="text-sm text-slate-400">Menunggu data jadwal…</p> : !upcoming.length ? <p className="flex items-start gap-2 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400"><CalendarDays aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />Tidak ada jadwal mendatang. Klik &quot;Jadwalkan&quot; pada laporan, atau &quot;Buat Acara&quot; di atas.</p> : <div className="divide-y divide-slate-800 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">{upcoming.map((item) => <button key={item.id} disabled={busy} onClick={() => onEditSchedule(item)} className="block w-full p-4 text-left hover:bg-slate-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-inset"><div className="flex items-center gap-1.5 text-xs text-slate-400"><CalendarClock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{item.date} · {item.startTime}–{item.endTime}</div><p className="mt-1 break-words text-sm font-semibold">{item.title}</p>{(item.picNama || item.location || item.fotoUrls?.length > 0) && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{item.picNama && <MetaBadge icon={UserRound}>{item.picNama}</MetaBadge>}{item.location && <MetaBadge icon={MapPin}>{item.location}</MetaBadge>}{item.fotoUrls?.length > 0 && <MetaBadge icon={Camera}>{item.fotoUrls.length}</MetaBadge>}</div>}</button>)}</div>}
+        </section>
+        <MiniCalendar schedules={upcoming} />
+      </div>}
     </div>
     <div className="flex flex-wrap gap-2 lg:justify-end"><button disabled={busy} onClick={onReports} className={`${button} bg-slate-800`}>Lihat semua laporan<ChevronRight aria-hidden="true" className="h-4 w-4" /></button>{user.role === 'admin' && <button disabled={busy} onClick={onUsers} className={`${button} text-blue-300`}>Kelola akun & persetujuan</button>}</div>
   </div>;
