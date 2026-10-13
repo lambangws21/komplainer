@@ -2,13 +2,16 @@ import { callScript, json, errorResponse, readBody, assertSameOrigin, clearSessi
 import { usesFirebase, firebaseAuth, requireFirebaseSession, firebasePasswordLogin, clearFirebaseSession } from '@/lib/server/firebase-auth';
 import { currentFirebaseUser, writeFirebaseMetadata } from '@/lib/server/firebase-accounts';
 import { hashPassword, verifyPassword, validatePassword } from '@/lib/server/password.mjs';
+import { checkRateLimit, clientIp } from '@/lib/server/rate-limit.mjs';
 export const maxDuration = 30;
 export async function POST(request) {
   try {
     assertSameOrigin(request);
+    checkRateLimit(`password:ip:${clientIp(request)}`, 20);
     const body = await readBody(request);
     if (usesFirebase()) {
       const identity = await requireFirebaseSession();
+      checkRateLimit(`password:id:${identity.uid}`, 8);
       const user = await currentFirebaseUser();
       try { validatePassword(body.password); } catch (error) { throw new ApiError(error.message); }
       if (body.password === body.currentPassword) throw new ApiError('Gunakan password baru yang berbeda.');

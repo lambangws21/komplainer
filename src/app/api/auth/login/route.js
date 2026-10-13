@@ -19,7 +19,7 @@ export async function POST(request) {
     checkRateLimit(`login:id:${ip}:${identifier}`, 8);
     if (usesFirebase()) {
       let email = identifier;
-      if (identifier !== 'lambangws' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
         if (!/^[a-z0-9][a-z0-9_.-]{2,31}$/.test(identifier)) throw new ApiError('Email/username atau password tidak valid.');
         const match = (await firebaseDirectory()).find((account) => account.username === identifier);
         if (!match) throw new ApiError('Email atau password salah.', 401);
@@ -36,6 +36,8 @@ export async function POST(request) {
       await clearSession();
       return json({ status: 'success', user });
     }
+    // 'lambangws' is the legacy Apps Script bootstrap identity seeded by setupKomplainer() before
+    // any directory exists — not a backdoor, this is how the very first admin account logs in.
     if (identifier !== 'lambangws' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) throw new ApiError('Email/username atau password tidak valid.');
     const credentials = await callScript('authLookup', { email: identifier }, false);
     // A dummy derivation avoids an immediate return for unknown accounts.

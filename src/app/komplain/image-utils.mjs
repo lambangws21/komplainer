@@ -5,12 +5,6 @@ export const MAX_PHOTOS_TOTAL = 15;
 const MAX_DIMENSION = 1280;
 const JPEG_QUALITY = 0.7;
 
-export function readableSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function loadDrawable(file) {
   if (typeof createImageBitmap === 'function') return createImageBitmap(file);
   return new Promise((resolve, reject) => {

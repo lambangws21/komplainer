@@ -6,7 +6,6 @@ export function complaintUserId(uid) {
 }
 export function firebaseEmail(email) {
   const value = String(email || '').trim().toLowerCase();
-  if (value === 'lambangws') return 'lambangws@komplainer.invalid';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || value.length > 254) throw new Error('Email/username tidak valid.');
   return value;
 }

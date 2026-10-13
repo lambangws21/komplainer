@@ -3,11 +3,13 @@ import { firebaseAuth, firebasePasswordRegister, setFirebaseSession, usesFirebas
 import { firebaseDirectory } from '@/lib/server/firebase-accounts';
 import { appClaims, profileFromAccount, registrationMetadata, usernameField, assertUsernameAvailable, REGISTRATION_UNITS } from '@/lib/server/firebase-profile.mjs';
 import { validatePassword } from '@/lib/server/password.mjs';
+import { checkRateLimit, clientIp } from '@/lib/server/rate-limit.mjs';
 
 export const maxDuration = 30;
 export async function POST(request) {
   try {
     assertSameOrigin(request);
+    checkRateLimit(`register:ip:${clientIp(request)}`, 10);
     if (!usesFirebase()) throw new ApiError('Pendaftaran Firebase belum diaktifkan.', 503);
     const body = await readBody(request);
     const nama = requiredText(body.nama, 'Nama');

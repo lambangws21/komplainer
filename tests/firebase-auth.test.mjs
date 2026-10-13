@@ -5,12 +5,13 @@ import { firebaseEmail, firebaseUid, complaintUserId } from '../src/lib/server/f
 import { authenticateFirebase } from '../src/lib/server/firebase-login.mjs';
 import { createFixture, fakeHash } from './helpers/apps-script-fixture.mjs';
 
-test('Firebase identity is scoped to Komplainer and preserves legacy admin username', () => {
+test('Firebase identity is scoped to Komplainer and rejects non-email values', () => {
   const id = `USR-${randomUUID()}`;
   assert.equal(complaintUserId(firebaseUid(id)), id);
   assert.throws(() => complaintUserId(id));
   assert.throws(() => complaintUserId('another-app:admin'));
-  assert.equal(firebaseEmail('lambangws'), 'lambangws@komplainer.invalid');
+  assert.throws(() => firebaseEmail('lambangws'));
+  assert.equal(firebaseEmail('person@example.com'), 'person@example.com');
 });
 
 test('existing Firebase password login is independent of Sheets and rejects mismatched tokens', async () => {
