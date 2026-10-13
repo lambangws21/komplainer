@@ -32,7 +32,6 @@ export function LoginPanel({ onLogin, initialError, notice }) {
   const submitLabel = busy ? register ? 'Mendaftarkan akun…' : 'Memeriksa akun…' : register ? 'Daftar sebagai pelapor' : 'Masuk';
   const loginInput = `${input} border-slate-700/80 bg-slate-950/60 placeholder:text-slate-500 transition-colors hover:border-slate-600`;
   return (
-    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center py-6">
     <section aria-labelledby="auth-title" className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 shadow-xl shadow-black/10">
       <div className="p-5 sm:p-7">
         <h2 id="auth-title" className="text-2xl font-semibold tracking-tight">{register ? 'Buat akun pelapor' : 'Selamat datang'}</h2>
@@ -62,7 +61,6 @@ export function LoginPanel({ onLogin, initialError, notice }) {
         <button type="button" disabled={busy} onClick={switchMode} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-semibold text-blue-300 hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50">{register ? 'Masuk' : 'Daftar sebagai pelapor'}<ArrowRight aria-hidden="true" className="h-4 w-4" /></button>
       </div>
     </section>
-    </div>
   );
 }
 export function ProfilePanel({ user, onChanged, onExpired }) {

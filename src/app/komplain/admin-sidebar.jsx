@@ -19,7 +19,7 @@ export default function AdminSidebar({ tab, setTab }) {
     ['backup', 'Backup', DatabaseBackup, () => setTab('backup')],
     [null, 'Jadwal', CalendarClock, () => { setTab('form'); setTimeout(scrollToSchedule, 50); }],
   ];
-  return <nav aria-label="Navigasi admin" className="sticky top-20 hidden w-56 shrink-0 space-y-1 self-start lg:block">
+  return <nav data-tour="admin-sidebar" aria-label="Navigasi admin" className="sticky top-20 hidden w-56 shrink-0 space-y-1 self-start lg:block">
     {items.map(([value, label, Icon, onSelect]) => <button key={label} type="button" onClick={onSelect} aria-current={value && tab === value ? 'page' : undefined} className={`${itemClass} ${value && tab === value ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>
       <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />{label}
     </button>)}

@@ -36,7 +36,7 @@ const classNames = {
 export default function MiniCalendar({ schedules = [] }) {
   const [month, setMonth] = useState(new Date());
   const eventDays = useMemo(() => schedules.map((item) => fromKey(item.date)).filter(Boolean), [schedules]);
-  return <section aria-label="Kalender" className="w-full min-w-0 space-y-2 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-4">
+  return <section data-tour="calendar" aria-label="Kalender" className="w-full min-w-0 space-y-2 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-4">
     <div className="flex items-center gap-2"><CalendarRange aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><h3 className="text-sm font-semibold">Kalender</h3></div>
     <DayPicker
       mode="default"

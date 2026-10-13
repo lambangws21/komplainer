@@ -1,0 +1,58 @@
+/* driver.js renders its popover appended to document.body, outside .komplain-theme, so these
+   overrides key off the same html[data-theme] attribute next-themes sets on <html> rather than
+   the .komplain-theme descendant-selector trick used in theme.css. Dark values here are the
+   defaults (no selector prefix) since dark is this app's base theme.
+
+   The arrow is a CSS-triangle trick: .driver-popover-arrow sets border on all 4 sides, then each
+   -side-X class transparents out 3 of them, leaving one visible "point". Each block below must
+   redo both steps together — overriding just the visible color without redoing the transparent
+   sides would undo the triangle shape (see driver.css itself for the base pattern). */
+.driver-popover {
+  background-color: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.45);
+  font-family: inherit;
+  padding: 1.1rem;
+}
+.driver-popover-title { color: #f8fafc; font-size: 1rem; font-weight: 700; }
+.driver-popover-description { color: #94a3b8; font-size: 0.875rem; line-height: 1.5; margin-top: 0.375rem; }
+.driver-popover-progress-text { color: #64748b; }
+.driver-popover-close-btn { color: #64748b; }
+.driver-popover-close-btn:hover, .driver-popover-close-btn:focus { color: #e2e8f0; }
+.driver-popover-footer-btn {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+}
+.driver-popover-footer-btn:hover, .driver-popover-footer-btn:focus { background-color: #334155; }
+.driver-popover-footer-btn.driver-popover-next-btn, .driver-popover-footer-btn.driver-popover-done-btn {
+  background-color: #2563eb; color: #fff; border-color: #2563eb;
+}
+.driver-popover-footer-btn.driver-popover-next-btn:hover, .driver-popover-footer-btn.driver-popover-done-btn:hover { background-color: #1d4ed8; }
+
+.driver-popover-arrow-side-left, .driver-popover-arrow-side-right, .driver-popover-arrow-side-top, .driver-popover-arrow-side-bottom { border-color: #0f172a; }
+.driver-popover-arrow-side-left { border-top-color: transparent; border-bottom-color: transparent; border-right-color: transparent; }
+.driver-popover-arrow-side-right { border-top-color: transparent; border-bottom-color: transparent; border-left-color: transparent; }
+.driver-popover-arrow-side-top { border-bottom-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+.driver-popover-arrow-side-bottom { border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+
+html[data-theme='light'] .driver-popover { background-color: #ffffff; color: #334155; border-color: #e2e8f0; }
+html[data-theme='light'] .driver-popover-title { color: #0f172a; }
+html[data-theme='light'] .driver-popover-description { color: #475569; }
+html[data-theme='light'] .driver-popover-progress-text { color: #64748b; }
+html[data-theme='light'] .driver-popover-close-btn { color: #94a3b8; }
+html[data-theme='light'] .driver-popover-close-btn:hover, html[data-theme='light'] .driver-popover-close-btn:focus { color: #1e293b; }
+html[data-theme='light'] .driver-popover-footer-btn { background-color: #f1f5f9; color: #1e293b; border-color: #e2e8f0; }
+html[data-theme='light'] .driver-popover-footer-btn:hover { background-color: #e2e8f0; }
+html[data-theme='light'] .driver-popover-footer-btn.driver-popover-next-btn, html[data-theme='light'] .driver-popover-footer-btn.driver-popover-done-btn { background-color: #2563eb; color: #fff; border-color: #2563eb; }
+html[data-theme='light'] .driver-popover-footer-btn.driver-popover-next-btn:hover, html[data-theme='light'] .driver-popover-footer-btn.driver-popover-done-btn:hover { background-color: #1d4ed8; }
+
+html[data-theme='light'] .driver-popover-arrow-side-left, html[data-theme='light'] .driver-popover-arrow-side-right, html[data-theme='light'] .driver-popover-arrow-side-top, html[data-theme='light'] .driver-popover-arrow-side-bottom { border-color: #ffffff; }
+html[data-theme='light'] .driver-popover-arrow-side-left { border-top-color: transparent; border-bottom-color: transparent; border-right-color: transparent; }
+html[data-theme='light'] .driver-popover-arrow-side-right { border-top-color: transparent; border-bottom-color: transparent; border-left-color: transparent; }
+html[data-theme='light'] .driver-popover-arrow-side-top { border-bottom-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+html[data-theme='light'] .driver-popover-arrow-side-bottom { border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }

@@ -1,6 +1,6 @@
 'use client';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone } from 'lucide-react';
+import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone, Compass } from 'lucide-react';
 import RoleBadge from './role-badge';
 import InfoPanel from './info-panel';
 import PushToggle from './push-toggle';
@@ -8,7 +8,7 @@ import ThemeToggle from './theme-toggle';
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, announcementCount = 0, onToggleAnnouncements }) {
+export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, announcementCount = 0, onToggleAnnouncements, onOpenTour }) {
   const showNav = user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
   // Admin gets the full set here too — on small screens AdminSidebar is hidden (lg:block), so
   // this pill row is the only way to reach Pengguna/Pengumuman/Backup on mobile.
@@ -21,11 +21,11 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
         <ThemeToggle />
         <InfoPanel />
         {showNav && <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild><button aria-label={`Notifikasi laporan baru${unreadCount ? `, ${unreadCount} belum dibuka` : ''}`} className={`${buttonClass} relative border border-slate-700 bg-slate-800 px-2.5`}>
+          <DropdownMenu.Trigger asChild><button data-tour="notifications" aria-label={`Notifikasi laporan baru${unreadCount ? `, ${unreadCount} belum dibuka` : ''}`} className={`${buttonClass} relative border border-slate-700 bg-slate-800 px-2.5`}>
             <Bell aria-hidden="true" className="h-4 w-4" />
             {unreadCount > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </button></DropdownMenu.Trigger>
-          <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={8} className="z-50 w-80 max-w-[90vw] rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
+          <DropdownMenu.Portal><DropdownMenu.Content data-role={user?.role || 'pelapor'} align="end" sideOffset={8} className="komplain-theme z-50 w-80 max-w-[90vw] rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
             <div className="flex items-center justify-between gap-2 px-2 py-1.5"><p className="text-sm font-semibold">Laporan belum dibuka</p>{unreadCount > 0 && <DropdownMenu.Item onSelect={onMarkAllRead} className="cursor-pointer text-xs font-semibold text-blue-300 outline-none hover:underline">Tandai semua dibaca</DropdownMenu.Item>}</div>
             <DropdownMenu.Separator className="my-1 h-px bg-slate-800" />
             {unreadCount === 0 ? <p className="px-2 py-3 text-sm text-slate-400">Tidak ada laporan baru.</p> : <div className="max-h-80 space-y-1 overflow-y-auto">{unreadItems.map((item) => <DropdownMenu.Item key={item.id} onSelect={() => onOpenNotification(item)} className="flex cursor-pointer flex-col gap-0.5 rounded-lg px-2 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800">
@@ -40,11 +40,12 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
         </button>}
         {showNav && <button onClick={onRefresh} disabled={loading || busy} aria-label="Muat ulang laporan" className={`${buttonClass} border border-slate-700 bg-slate-800 px-2.5`}><RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /></button>}
         {user && <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild><button aria-label="Menu akun" className={`${buttonClass} border border-slate-700 bg-slate-800 px-2 sm:pr-2.5`}><span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">{(user.nama || '?').trim().slice(0, 1).toUpperCase()}</span><span className="hidden text-left sm:block"><span className="block max-w-[10rem] truncate text-sm font-semibold">{user.nama}</span><span className="block text-xs text-slate-400">{user.unit}</span></span><ChevronDown aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" /></button></DropdownMenu.Trigger>
-          <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={8} className="z-50 min-w-[14rem] rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
+          <DropdownMenu.Trigger asChild><button data-tour="account-menu" aria-label="Menu akun" className={`${buttonClass} border border-slate-700 bg-slate-800 px-2 sm:pr-2.5`}><span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">{(user.nama || '?').trim().slice(0, 1).toUpperCase()}</span><span className="hidden text-left sm:block"><span className="block max-w-[10rem] truncate text-sm font-semibold">{user.nama}</span><span className="block text-xs text-slate-400">{user.unit}</span></span><ChevronDown aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" /></button></DropdownMenu.Trigger>
+          <DropdownMenu.Portal><DropdownMenu.Content data-role={user?.role || 'pelapor'} align="end" sideOffset={8} className="komplain-theme z-50 min-w-[14rem] rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
             <div className="px-3 py-2"><p className="break-words text-sm font-semibold">{user.nama}</p><p className="break-words text-xs text-slate-400">{user.email}</p><div className="mt-2 flex items-center gap-2"><RoleBadge role={user.role} /><span className="text-xs text-slate-400">{user.unit}</span></div></div>
             <DropdownMenu.Separator className="my-2 h-px bg-slate-800" />
             {showNav && <DropdownMenu.Item onSelect={() => setTab('account')} className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800 ${tab === 'account' ? 'bg-slate-800' : ''}`}><UserCog aria-hidden="true" className="h-4 w-4" />Akun saya</DropdownMenu.Item>}
+            {showNav && <DropdownMenu.Item onSelect={onOpenTour} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800"><Compass aria-hidden="true" className="h-4 w-4" />Jelajahi fitur</DropdownMenu.Item>}
             {showNav && <PushToggle onExpired={onExpired} />}
             <DropdownMenu.Separator className="my-2 h-px bg-slate-800" />
             <DropdownMenu.Item disabled={loggingOut || busy} onSelect={onLogout} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-300 outline-none hover:bg-red-950/40 focus:bg-red-950/40 data-[disabled]:opacity-50"><LogOut aria-hidden="true" className="h-4 w-4" />{loggingOut ? 'Keluar…' : 'Keluar'}</DropdownMenu.Item>
@@ -52,6 +53,6 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
         </DropdownMenu.Root>}
       </div>
     </div>
-    {showNav && <nav aria-label="Halaman komplain" className={`mx-auto mt-3 grid max-w-7xl gap-1.5 sm:flex sm:flex-wrap ${user?.role === 'admin' ? 'grid-cols-3 lg:hidden' : 'grid-cols-2'}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`${buttonClass} min-w-0 px-2 text-xs sm:px-4 sm:text-sm ${(tab === value || (value === 'table' && tab === 'recap')) ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{label}</button>)}</nav>}
+    {showNav && <nav data-tour="nav-tabs" aria-label="Halaman komplain" className={`mx-auto mt-3 grid max-w-7xl gap-1.5 sm:flex sm:flex-wrap ${user?.role === 'admin' ? 'grid-cols-3 lg:hidden' : 'grid-cols-2'}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`${buttonClass} min-w-0 px-2 text-xs sm:px-4 sm:text-sm ${(tab === value || (value === 'table' && tab === 'recap')) ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{label}</button>)}</nav>}
   </header>;
 }

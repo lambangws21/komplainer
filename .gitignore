@@ -50,3 +50,6 @@ client_secret_*.json
 
 # Private migration source snapshots
 .local-backups/
+
+# Local tutorial screen recordings (large binaries, not source)
+/tutorials/
