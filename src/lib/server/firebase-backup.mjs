@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { firestoreDb, photoBucket, usesFirestore } from './firestore-store.mjs';
-import { BACKUPS } from './firestore-domain.mjs';
+import { BACKUPS, backupId } from './firestore-domain.mjs';
 import { ApiError } from './api-error.mjs';
 export const backupEnabled = () => usesFirestore() && process.env.FIREBASE_BACKUP_ENABLED === 'true';
 export function cronAuthorized(header, secret) {
@@ -59,6 +59,21 @@ export async function drainBackupQueue({ limit = 5, force = false, db = firestor
     results.push(await syncBackupJob(job.id, { db, force }));
   }
   return { processed: results.filter((result) => !result.skipped).length, succeeded: results.filter((result) => result.success).length };
+}
+// Lets the "Hapus permanen" control check, for one specific report version, whether its backup
+// job actually completed — the precondition for permanent deletion — without pulling the whole
+// job list (backupStatus below only returns the 10 most recent jobs globally).
+export async function reportBackupState(reportId, version, db = firestoreDb()) {
+  if (!usesFirestore()) return null;
+  const doc = await db.collection(BACKUPS).doc(backupId(reportId, version)).get();
+  if (doc.exists) return doc.data().state;
+  // Reports migrated from the old Apps Script/Sheets system got their backup jobs keyed by a
+  // one-off id scheme instead of backupId(id, version) — see purgeReport in firestore-store.mjs
+  // for the full explanation. Fall back to a reportId query so this doesn't read as "never
+  // backed up" for data that's genuinely safe in Drive/Sheets.
+  const fallback = await db.collection(BACKUPS).where('reportId', '==', reportId).get();
+  const match = fallback.docs.find((entry) => entry.data().version === version && entry.data().state === 'done');
+  return match ? 'done' : null;
 }
 export async function backupStatus() {
   if (!usesFirestore()) return { provider: 'apps-script', enabled: false };

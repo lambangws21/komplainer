@@ -17,8 +17,8 @@ export async function POST(request) {
   try {
     assertSameOrigin(request);
     const body = await readBody(request);
-    if (!['create', 'update', 'delete', 'assign', 'followUp', 'reopen'].includes(body.action)) throw new ApiError('Aksi laporan tidak valid.');
-    const keys = ['id', 'version', 'tanggal', 'dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'penangananSelanjutnya', 'status', 'statusCase', 'statusPenanganan', 'picId', 'tenggat', 'catatan', 'requestId', 'photos'];
+    if (!['create', 'update', 'delete', 'assign', 'followUp', 'reopen', 'purge', 'bulkPurge'].includes(body.action)) throw new ApiError('Aksi laporan tidak valid.');
+    const keys = ['id', 'version', 'tanggal', 'dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'penangananSelanjutnya', 'status', 'statusCase', 'statusPenanganan', 'picId', 'tenggat', 'catatan', 'requestId', 'photos', 'items'];
     const payload = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
     const result = await callReports(body.action, payload);
     if (result.backupJobId && backupEnabled()) after(async () => { try { await syncBackupJob(result.backupJobId); } catch { /* Durable queue remains available to cron. */ } });
