@@ -1,7 +1,9 @@
 import { randomBytes, scrypt as derive, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 const scrypt = promisify(derive);
-export const SESSION_SECONDS = 8 * 60 * 60;
+// 14 days — the maximum Firebase's createSessionCookie allows, so a login stays valid without
+// re-entering a password until then (the account menu's "Keluar" still ends it on demand).
+export const SESSION_SECONDS = 14 * 24 * 60 * 60;
 export function validatePassword(password) {
   if (typeof password !== 'string' || password.length < 6 || password.length > 128) throw new Error('Password harus terdiri dari 6–128 karakter.');
 }

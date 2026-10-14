@@ -14,6 +14,7 @@ import { useDialogViewport } from './use-dialog-viewport';
 import { mobileDialog, formFooter, dialogHeader, dialogBody, historyNote, picResponseBubble } from './ui-styles.mjs';
 import LoadingState from './loading-state';
 import InstallApp from './install-app';
+import PushPrompt from './push-prompt';
 import Navbar from './navbar';
 import AnnouncementBanner from './announcement-banner';
 import { LoginPanel, PasswordPanel, ProfilePanel, ApprovalPanel } from './auth-panel';
@@ -597,7 +598,7 @@ export default function KomplainPage() {
 
   if (showAuthShell) return <main lang="id" data-role="pelapor" className="komplain-theme min-h-screen bg-slate-950 text-slate-100">{mainContent}</main>;
 
-  return <main lang="id" data-role={user?.role || 'pelapor'} className="komplain-theme min-h-screen bg-slate-950 px-3 py-4 text-slate-100 sm:p-8"><div className={`mx-auto space-y-6 ${showAdminSidebar ? 'max-w-screen-2xl' : 'max-w-7xl'}`}>{header}<FeatureTour open={tourOpen} onOpenChange={(next) => { if (!next) closeTour(); }} role={user?.role} /><AnnouncementBanner user={user} dismissing={announcementDismissing} items={announcementNotice} open={announcementBannerOpen} onMinimize={() => setAnnouncementBannerOpen(false)} onDismiss={dismissAnnouncement} onOpen={() => openModal('announcementView')} />{announcementError && <p role="alert" className="text-sm text-red-300">{announcementError}</p>}<InstallApp role={user?.role} />
+  return <main lang="id" data-role={user?.role || 'pelapor'} className="komplain-theme min-h-screen bg-slate-950 px-3 py-4 text-slate-100 sm:p-8"><div className={`mx-auto space-y-6 ${showAdminSidebar ? 'max-w-screen-2xl' : 'max-w-7xl'}`}>{header}<FeatureTour open={tourOpen} onOpenChange={(next) => { if (!next) closeTour(); }} role={user?.role} /><AnnouncementBanner user={user} dismissing={announcementDismissing} items={announcementNotice} open={announcementBannerOpen} onMinimize={() => setAnnouncementBannerOpen(false)} onDismiss={dismissAnnouncement} onOpen={() => openModal('announcementView')} />{announcementError && <p role="alert" className="text-sm text-red-300">{announcementError}</p>}<PushPrompt userId={user?.id} active={sessionActive && !tourOpen} onExpired={endSession} /><InstallApp role={user?.role} />
     {showAdminSidebar ? <div className="flex items-start gap-6"><AdminSidebar tab={tab} setTab={setTab} /><div className="min-w-0 flex-1 space-y-6">{mainContent}</div></div> : mainContent}
   </div>
   {busy && modal === null && <LoadingState compact title="Mengambil laporan sebagai PIC…" description="Penugasan sedang disimpan." />}{actionError && modal === null && <div role="alert" className="mt-3 rounded-xl border border-red-800 p-3 text-sm text-red-200">{actionError}{mutationConflict && <button type="button" disabled={busy} onClick={reloadConflict} className={`${buttonClass} mt-2 block bg-blue-600`}>Muat data terbaru</button>}</div>}
