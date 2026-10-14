@@ -4,6 +4,7 @@ import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone, Compas
 import RoleBadge from './role-badge';
 import InfoPanel from './info-panel';
 import PushToggle from './push-toggle';
+import SoundToggle from './sound-toggle';
 import ThemeToggle from './theme-toggle';
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
@@ -47,6 +48,7 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
             {showNav && <DropdownMenu.Item onSelect={() => setTab('account')} className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800 ${tab === 'account' ? 'bg-slate-800' : ''}`}><UserCog aria-hidden="true" className="h-4 w-4" />Akun saya</DropdownMenu.Item>}
             {showNav && <DropdownMenu.Item onSelect={onOpenTour} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800"><Compass aria-hidden="true" className="h-4 w-4" />Jelajahi fitur</DropdownMenu.Item>}
             {showNav && <PushToggle onExpired={onExpired} />}
+            {showNav && <SoundToggle />}
             <DropdownMenu.Separator className="my-2 h-px bg-slate-800" />
             <DropdownMenu.Item disabled={loggingOut || busy} onSelect={onLogout} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-300 outline-none hover:bg-red-950/40 focus:bg-red-950/40 data-[disabled]:opacity-50"><LogOut aria-hidden="true" className="h-4 w-4" />{loggingOut ? 'Keluar…' : 'Keluar'}</DropdownMenu.Item>
           </DropdownMenu.Content></DropdownMenu.Portal>

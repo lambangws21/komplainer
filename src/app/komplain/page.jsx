@@ -38,6 +38,7 @@ import { ANNOUNCEMENT_AUDIENCES, announcementAudience } from '@/lib/announcement
 import { apiRequest, postJson } from './api-client.mjs';
 import { ROLE_LABELS, STATUS_CASE, handlingStatus, historyChanges, formatHistoryChange, editedFieldLabels } from './workflow.mjs';
 import { loadReadIds, saveReadIds } from './read-tracking.mjs';
+import { playNotificationChime } from './notification-sound.mjs';
 
 // Code-split tabs/panels that aren't needed on first paint (login screen, or admin-only tabs)
 // so the initial bundle a logged-out visitor downloads stays small.
@@ -124,6 +125,7 @@ export default function KomplainPage() {
   const criticalSeenRef = useRef(new Set());
   const [mentionables, setMentionables] = useState([]);
   const [mentionNotice, setMentionNotice] = useState([]);
+  const mentionSeenRef = useRef(new Set());
   const [announcementNotice, setAnnouncementNotice] = useState([]);
   const [announcementBannerOpen, setAnnouncementBannerOpen] = useState(true);
   const announcementReadRef = useRef(new Set());
@@ -212,7 +214,7 @@ export default function KomplainPage() {
     setUser(null); setList([]); setAssignees([]); setLoaded(false); setLoading(false);
     setModal(null); setEditItem(null); setWorkflowItem(null); setForm(newForm()); setFormPhotos([]); setPicPhotos([]);
     setAssignedNotice([]); setIncomingNotice([]); setCriticalNotice([]); criticalSeenRef.current = new Set(); setReadIds(new Set());
-    setMentionables([]); setMentionNotice([]); setAnnouncementNotice([]); setAnnouncementError(''); setAnnouncementDismissing(null); announcementSeenRef.current = new Set(); announcementReadRef.current = new Set(); setAnnouncementBannerOpen(true);
+    setMentionables([]); setMentionNotice([]); mentionSeenRef.current = new Set(); setAnnouncementNotice([]); setAnnouncementError(''); setAnnouncementDismissing(null); announcementSeenRef.current = new Set(); announcementReadRef.current = new Set(); setAnnouncementBannerOpen(true);
     setSuccessText(''); setSavedReportId(null); setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
   }, []);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -240,6 +242,16 @@ export default function KomplainPage() {
       : list.filter((item) => item.id != null && item.pelaporId === user.id && item.picId && !readIds.has(item.id));
     return [...items].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   }, [list, user, readIds]);
+  // Mirrors the two badges already shown in the navbar (bell + megaphone) onto the PWA/home-screen
+  // icon (Badging API) and the browser tab title — so the count is visible even when this tab
+  // isn't focused, not just inside the open dropdown.
+  const totalBadgeCount = unreadItems.length + announcementNotice.length;
+  useEffect(() => {
+    try { if (totalBadgeCount > 0) navigator.setAppBadge?.(totalBadgeCount); else navigator.clearAppBadge?.(); } catch { /* Badging API unsupported or blocked — no-op */ }
+    const baseTitle = 'Laporan Komplain';
+    document.title = totalBadgeCount > 0 ? `(${totalBadgeCount > 99 ? '99+' : totalBadgeCount}) ${baseTitle}` : baseTitle;
+    return () => { document.title = baseTitle; };
+  }, [totalBadgeCount]);
   useEffect(() => {
     let alive = true;
     apiRequest('/api/auth/session').then((result) => { if (alive) setUser(result.user); })
@@ -267,6 +279,7 @@ export default function KomplainPage() {
           }
           if (newlyAssigned.length) setAssignedNotice((queue) => [...queue, ...newlyAssigned]);
           if (newlyArrived.length) setIncomingNotice((queue) => [...queue, ...newlyArrived]);
+          if (newlyAssigned.length || newlyArrived.length) playNotificationChime();
         }
         if (activeUser && ['admin', 'petugas'].includes(activeUser.role)) {
           const criticalNow = result.data.filter((item) => item.statusCase === 'Ada Kendala' && !item.picId && handlingStatus(item) !== 'Selesai');
@@ -279,6 +292,7 @@ export default function KomplainPage() {
             const keptIds = new Set(kept.map((item) => item.id));
             return [...kept, ...newCritical.filter((item) => !keptIds.has(item.id))];
           });
+          if (newCritical.length) playNotificationChime();
         }
         previousListRef.current = result.data;
         setList(result.data); setAssignees(result.assignees || []); setLoaded(true);
@@ -293,10 +307,15 @@ export default function KomplainPage() {
     const [mentions, announcements] = await Promise.allSettled([apiRequest('/api/mentions'), apiRequest('/api/announcements')]);
     if (userRef.current?.id !== accountId) return;
     if ([mentions, announcements].some((result) => result.status === 'rejected' && result.reason.code === 401)) { endSession(); return; }
-    if (mentions.status === 'fulfilled') setMentionNotice(mentions.value.data || []);
+    if (mentions.status === 'fulfilled') {
+      const items = mentions.value.data || [];
+      if (items.some((item) => !mentionSeenRef.current.has(item.id))) playNotificationChime();
+      mentionSeenRef.current = new Set(items.map((item) => item.id));
+      setMentionNotice(items);
+    }
     if (announcements.status === 'fulfilled') {
       const activeAnnouncements = (announcements.value.data || []).filter((item) => !announcementReadRef.current.has(item.id));
-      if (activeAnnouncements.some((item) => !announcementSeenRef.current.has(item.id))) setAnnouncementBannerOpen(true);
+      if (activeAnnouncements.some((item) => !announcementSeenRef.current.has(item.id))) { setAnnouncementBannerOpen(true); playNotificationChime(); }
       announcementSeenRef.current = new Set(activeAnnouncements.map((item) => item.id));
       setAnnouncementNotice(activeAnnouncements);
     }
