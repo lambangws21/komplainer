@@ -25,11 +25,11 @@ export async function POST(request) {
     if (result.action && usesFirestore()) after(async () => {
       try {
         const accounts = await firebaseDirectory();
-        const targets = pushTargetsForMutation(result.action, result.data, result.mentions, accounts);
+        const targets = result.pushTargets || pushTargetsForMutation(result.action, result.data, result.mentions, accounts);
         for (const target of targets) await sendPush([target.userId], { title: target.title, body: target.body, url: target.url });
       } catch { /* Best-effort — in-app notifications still cover this. */ }
     });
-    const response = { ...result }; delete response.backupJobId; delete response.action; delete response.mentions;
+    const response = { ...result }; delete response.backupJobId; delete response.action; delete response.mentions; delete response.pushTargets;
     return json(response);
   } catch (error) { return errorResponse(error); }
 }

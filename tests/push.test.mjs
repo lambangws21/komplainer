@@ -38,6 +38,17 @@ test('mentions push to each mentioned user regardless of action', () => {
   assert.deepEqual(targets.map((t) => t.userId).sort(), ['admin1', 'pelapor1']);
 });
 
+test('a follow-up update pushes to the reporter, with wording depending on completion', () => {
+  const inProgress = { dokter: 'dr. Andi', rumahSakit: 'RS Harapan', pelaporId: 'pelapor1', statusPenanganan: 'Diproses' };
+  assert.deepEqual(pushTargetsForMutation('followUp', inProgress, [], accounts), [{ userId: 'pelapor1', title: 'Ada update penanganan laporan Anda', body: 'dr. Andi · RS Harapan', url: '/komplain' }]);
+  const done = { ...inProgress, statusPenanganan: 'Selesai' };
+  assert.equal(pushTargetsForMutation('followUp', done, [], accounts)[0].title, 'Laporan Anda selesai ditangani');
+});
+
+test('a follow-up with no reporter on record pushes to no one', () => {
+  assert.deepEqual(pushTargetsForMutation('followUp', { dokter: 'dr. Andi' }, [], accounts), []);
+});
+
 test('a create + assign + mention can all fire together without duplicating unrelated targets', () => {
   const item = { dokter: 'dr. Andi', rumahSakit: 'RS Harapan', statusCase: 'Ada Kendala', picId: 'petugas1', picNama: 'Budi', pelaporId: 'pelapor1' };
   const targets = pushTargetsForMutation('assign', item, ['pelapor1'], accounts);

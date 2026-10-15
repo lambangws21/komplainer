@@ -64,6 +64,7 @@ export function pushTargetsForMutation(action, item, mentions, accounts) {
     for (const account of accounts) if (['admin', 'petugas'].includes(account.role) && account.active) push(account.id, 'Laporan baru', `${item.dokter || 'Dokter'} · ${item.rumahSakit || 'RS'}`);
   }
   if (action === 'assign' && item.picId && item.pelaporId) push(item.pelaporId, 'Laporan Anda ditugaskan', `PIC: ${item.picNama || '-'}`);
+  if (action === 'followUp' && item.pelaporId) push(item.pelaporId, item.statusPenanganan === 'Selesai' ? 'Laporan Anda selesai ditangani' : 'Ada update penanganan laporan Anda', `${item.dokter || 'Laporan'} · ${item.rumahSakit || ''}`.trim());
   for (const mentionedId of mentions || []) push(mentionedId, 'Anda disebut', `${item.dokter || 'Laporan'} · ${item.rumahSakit || ''}`.trim());
   return targets;
 }

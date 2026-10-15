@@ -150,7 +150,8 @@ export async function executeFirestore(action, body, { user, accounts, db = fire
       else await noticeRef.set({ id: noticeRef.id, reportId: id, reportLabel, byUserId: user.id, byNama: user.nama, type: body.type, targetUserId, createdAt: new Date().toISOString(), read: false });
     }
     const updated = { ...old, reactions };
-    return { status: 'success', data: { ...publicReport(updated, accounts, user), reactionDetails: reactionDetails(updated, accounts) }, id };
+    const pushTargets = removed ? [] : noticeTargets.map((targetUserId) => ({ userId: targetUserId, title: body.type === 'love' ? `${user.nama} menyukai (love) laporan Anda` : `${user.nama} menyukai laporan Anda`, body: reportLabel, url: '/komplain' }));
+    return { status: 'success', action: 'react', pushTargets, data: { ...publicReport(updated, accounts, user), reactionDetails: reactionDetails(updated, accounts) }, id };
   }
   const incoming = validatePhotos(body.photos);
   const now = new Date().toISOString();
