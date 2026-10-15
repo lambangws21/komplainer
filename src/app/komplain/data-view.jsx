@@ -119,7 +119,7 @@ function KanbanCard({ item, onOpen, Badge, formatDate }) {
       <div className="flex min-w-0 items-center gap-1.5">{item.picId ? <><Avatar name={item.picNama} /><span className="truncate text-xs text-slate-300">{item.picNama}</span></> : <span className="text-xs font-semibold text-amber-300">Belum ada PIC</span>}</div>
       {item.status && <Badge status={item.status} />}
     </div>
-    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500"><span>{formatDate(item.tanggal)}</span>{reactionTotal > 0 && <span className="flex items-center gap-1 text-pink-300"><Heart aria-hidden="true" className="h-3 w-3 fill-current" />{reactionTotal}</span>}</div>
+    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500"><span>{formatDate(item.tanggal)}</span><div className="flex items-center gap-2"><span className="flex items-center gap-1" title="Jumlah riwayat perubahan"><MessageCircle aria-hidden="true" className="h-3 w-3" />{item.version || 1}</span>{reactionTotal > 0 && <span className="flex items-center gap-1 text-pink-300"><Heart aria-hidden="true" className="h-3 w-3 fill-current" />{reactionTotal}</span>}</div></div>
   </div>;
 }
 function KanbanBoard({ items, mobile, onOpen, Badge, formatDate }) {
