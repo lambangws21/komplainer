@@ -54,6 +54,23 @@ export async function sendPush(userIds, payload, db = firestoreDb()) {
   }));
 }
 
+// Broadcasts to every subscribed device directly — unlike sendPush, this isn't scoped to a
+// handful of userIds from one mutation, so it skips the per-user "in" query and just fans out
+// over the whole subscriptions collection once a day (see the cron entry in vercel.json).
+export async function sendBroadcast(payload, db = firestoreDb()) {
+  let config;
+  try { config = vapidDetails(); } catch { return { sent: 0, total: 0 }; }
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+  const snapshot = await db.collection(PUSH_SUBSCRIPTIONS).get();
+  const body = JSON.stringify(payload);
+  const results = await Promise.allSettled(snapshot.docs.map(async (doc) => {
+    const sub = doc.data();
+    try { await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body); }
+    catch (error) { if (error?.statusCode === 404 || error?.statusCode === 410) await removeSubscription(sub.endpoint, db); throw error; }
+  }));
+  return { sent: results.filter((r) => r.status === 'fulfilled').length, total: snapshot.size };
+}
+
 // Centralizes "who gets notified about what" for report mutations — see the Web Push plan's
 // scope note: this fires once at the moment of the event rather than replicating the in-app
 // bell's polling/dedup semantics.

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff } from 'lucide-react';
+import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff, Inbox } from 'lucide-react';
 import WorkflowBadge from './workflow-badge';
 import { InlineText } from './formatted-text';
 import { handlingStatus, canFollowUp } from './workflow.mjs';
@@ -11,10 +11,12 @@ const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-x
 function MetaBadge({ icon: Icon, children, emphasis = false }) {
   return <span className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${emphasis ? 'border-slate-600 bg-slate-800 font-semibold text-slate-100' : 'border-slate-700 bg-slate-800/70 text-slate-300'}`}><Icon aria-hidden="true" className={`h-3 w-3 shrink-0 ${emphasis ? 'text-slate-300' : 'text-slate-400'}`} /><span className="truncate">{children}</span></span>;
 }
-export default function HomePanel({ summary, summaryLoading, hasMoreLatest, loadingMoreLatest, onLoadMoreLatest, schedules, schedulesLoading, user, busy, onCreate, onOpen, onReports, onRecap, onUsers, onAnnouncement, onAssign, onFollowUp, onScheduleReport, onCreateSchedule, onEditSchedule, onExpired }) {
+export default function HomePanel({ summary, summaryLoading, hasMoreLatest, loadingMoreLatest, onLoadMoreLatest, schedules, schedulesLoading, user, busy, onCreate, onOpen, onReports, onRecap, onUsers, onAnnouncement, onAssign, onFollowUp, onTakeReport, onScheduleReport, onCreateSchedule, onEditSchedule, onExpired }) {
   const loaded = !summaryLoading && !!summary;
   const counts = summary?.counts || {};
   const attention = summary?.attention || [];
+  const incoming = summary?.incoming || [];
+  const [incomingOpen, setIncomingOpen] = useState(true);
   const latest = summary?.latest?.items || [];
   const schedulesLoaded = !schedulesLoading && !!schedules;
   const upcoming = schedules || [];
@@ -57,6 +59,20 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
         ['Selesai', counts.completed, 'Penanganan telah diselesaikan', CheckCircle2, 'text-emerald-300', false],
       ].map(([label, count, hint, Icon, color, primary]) => <div key={label} className={`min-w-0 rounded-2xl border bg-slate-900/70 p-4 sm:p-5 ${primary ? 'border-slate-700' : 'border-slate-800'}`}><div className="flex items-center justify-between gap-2"><p className="text-sm text-slate-400">{label}</p><Icon aria-hidden="true" className={`h-5 w-5 shrink-0 ${color}`} /></div><p className={`mt-3 text-2xl font-semibold tabular-nums sm:mt-4 sm:text-3xl ${color}`}>{loaded ? count : '—'}</p><p className="mt-2 hidden text-xs leading-5 text-slate-400 sm:block">{hint}</p></div>)}
     </div>
+    {isPetugas && <section data-tour="incoming" aria-label="Laporan baru masuk" className={`rounded-2xl border p-4 sm:p-5 ${loaded && incoming.length > 0 ? 'border-sky-800/60 bg-sky-950/20' : 'border-slate-800 bg-slate-900/50'}`}>
+      <button type="button" onClick={() => setIncomingOpen((value) => !value)} aria-expanded={incomingOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+        <span className="flex items-center gap-2"><Inbox aria-hidden="true" className={`h-5 w-5 shrink-0 ${loaded && incoming.length > 0 ? 'text-sky-300' : 'text-slate-400'}`} /><h3 className="font-semibold">Laporan Baru Masuk{loaded ? ` (${counts.incoming || 0})` : ''}</h3></span>
+        <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${incomingOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {incomingOpen && (!loaded ? <p className="mt-2 text-sm text-slate-400">Menunggu data laporan…</p> : !incoming.length ? <p className="mt-2 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Tidak ada laporan baru yang belum diambil.</p> : <>
+        <ol className="mt-3 divide-y divide-sky-900/40 overflow-hidden rounded-xl border border-sky-900/40">{incoming.map((item) => <li key={item.id} className="bg-slate-950/30 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 truncate text-sm font-medium">{item.dokter || 'Dokter belum diisi'} · {item.rumahSakit || 'RS belum diisi'}</p>{item.statusCase && <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${item.statusCase === 'Ada Kendala' ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>{item.statusCase}</span>}</div>
+          <p className="mt-1 line-clamp-2 break-words text-xs text-slate-400"><InlineText text={item.komplain || 'Deskripsi belum diisi'} /></p>
+          <button disabled={busy} onClick={() => onTakeReport(item)} className={`${button} mt-2 w-full bg-sky-700 text-white hover:bg-sky-600`}><UserRound aria-hidden="true" className="h-4 w-4" />Ambil sebagai PIC</button>
+        </li>)}</ol>
+        {counts.incoming > incoming.length && <p className="mt-2 text-xs text-slate-400">Menampilkan {incoming.length} dari {counts.incoming} laporan baru. Lihat daftar laporan untuk lainnya.</p>}
+      </>)}
+    </section>}
     {isAdmin && <section data-tour="sla" aria-label="Laporan terlambat" className={`rounded-2xl border p-4 sm:p-5 ${loaded && stale.length > 0 ? 'border-amber-800/60 bg-amber-950/20' : 'border-slate-800 bg-slate-900/50'}`}>
       <button type="button" onClick={() => setStaleOpen((value) => !value)} aria-expanded={staleOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         <span className="flex items-center gap-2"><AlarmClockOff aria-hidden="true" className={`h-5 w-5 shrink-0 ${loaded && stale.length > 0 ? 'text-amber-300' : 'text-slate-400'}`} /><h3 className="font-semibold">Laporan Terlambat{loaded ? ` (${stale.length})` : ''}</h3></span>

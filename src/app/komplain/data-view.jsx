@@ -104,12 +104,15 @@ const WORKFLOW_STATUS_HINT = {
 };
 
 // A single card, shared by the desktop columns and the mobile per-status tab list. The whole
-// card opens the same detail dialog as "Lihat detail" in the table — Kanban here is a read view,
-// not a drag-and-drop board (status changes still go through assign/follow-up like everywhere
-// else), so a click is all it needs.
-function KanbanCard({ item, onOpen, Badge, formatDate }) {
+// card opens the same detail dialog as "Lihat detail" in the table, and — desktop only — can
+// also be dragged to another column; a drop never mutates data directly (it triggers the exact
+// same assign/self-assign/follow-up/reopen action the card's own primary button would, via
+// onDropAction), so dragging is a faster on-ramp into the existing validated flow, not a
+// shortcut around it. Required fields (severity, catatan, solusi) still have to be filled in
+// whichever dialog that opens.
+function KanbanCard({ item, onOpen, Badge, formatDate, draggable = false, dragging = false, onDragStart, onDragEnd }) {
   const reactionTotal = (item.reactions?.like || 0) + (item.reactions?.love || 0);
-  return <div role="button" tabIndex={0} onClick={() => onOpen(item)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item); } }} className={`min-w-0 cursor-pointer rounded-xl border p-3 text-left shadow-sm transition hover:border-blue-500/60 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${workflowCardStyle(item)}`}>
+  return <div role="button" tabIndex={0} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={() => onOpen(item)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item); } }} className={`min-w-0 cursor-pointer rounded-xl border p-3 text-left shadow-sm transition hover:border-blue-500/60 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${dragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${workflowCardStyle(item)}`}>
     <div className="flex items-start justify-between gap-2"><p className="break-words text-sm font-semibold leading-5 text-slate-100">{item.dokter || 'Dokter tidak tersedia'}</p><StatusCaseBadge statusCase={item.statusCase} /></div>
     <p className="mt-0.5 break-words text-xs text-slate-400">{item.rumahSakit || 'Rumah sakit belum diisi'}</p>
     <p className="mt-2 truncate text-xs font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</p>
@@ -122,8 +125,10 @@ function KanbanCard({ item, onOpen, Badge, formatDate }) {
     <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500"><span>{formatDate(item.tanggal)}</span><div className="flex items-center gap-2"><span className="flex items-center gap-1" title="Jumlah riwayat perubahan"><MessageCircle aria-hidden="true" className="h-3 w-3" />{item.version || 1}</span>{reactionTotal > 0 && <span className="flex items-center gap-1 text-pink-300"><Heart aria-hidden="true" className="h-3 w-3 fill-current" />{reactionTotal}</span>}</div></div>
   </div>;
 }
-function KanbanBoard({ items, mobile, onOpen, Badge, formatDate }) {
+function KanbanBoard({ items, mobile, onOpen, Badge, formatDate, onDropAction }) {
   const [mobileTab, setMobileTab] = useState(WORKFLOW_STATUSES[0]);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState(null);
   const groups = useMemo(() => {
     const map = new Map(WORKFLOW_STATUSES.map((status) => [status, []]));
     for (const item of items) (map.get(handlingStatus(item)) || map.get('Baru')).push(item);
@@ -137,9 +142,20 @@ function KanbanBoard({ items, mobile, onOpen, Badge, formatDate }) {
       {activeItems.length === 0 ? <p className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">Tidak ada laporan berstatus {mobileTab}.</p> : <div className="space-y-2">{activeItems.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} Badge={Badge} formatDate={formatDate} />)}</div>}
     </div>;
   }
-  return <div role="region" aria-label="Papan kanban laporan" className="flex gap-3 overflow-x-auto p-3 sm:p-5">{WORKFLOW_STATUSES.map((status) => { const columnItems = groups.get(status) || []; return <div key={status} className="flex min-w-[240px] flex-1 flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+  // Dragging only ever reads the source item off `items` by id (not off drag payload data) —
+  // the dataTransfer channel just carries the id across the browser's native DnD boundary.
+  const handleDrop = (status) => (event) => {
+    event.preventDefault();
+    setDragOverStatus(null);
+    setDraggingId(null);
+    const id = event.dataTransfer.getData('text/plain');
+    const item = items.find((entry) => String(entry.id) === id);
+    if (!item || handlingStatus(item) === status) return;
+    onDropAction?.(item)?.();
+  };
+  return <div role="region" aria-label="Papan kanban laporan" className="flex gap-3 overflow-x-auto p-3 sm:p-5">{WORKFLOW_STATUSES.map((status) => { const columnItems = groups.get(status) || []; return <div key={status} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; if (dragOverStatus !== status) setDragOverStatus(status); }} onDragLeave={() => setDragOverStatus((current) => current === status ? null : current)} onDrop={handleDrop(status)} className={`flex min-w-[240px] flex-1 flex-col gap-2 rounded-xl border p-2 transition-colors ${dragOverStatus === status ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950/40'}`}>
     <div className="flex items-center gap-1.5 px-1 py-1"><span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${KANBAN_DOT_COLOR[status]}`} /><h3 className={`text-sm font-semibold ${KANBAN_COLUMN_ACCENT[status]}`}>{status}</h3><FieldInfo text={WORKFLOW_STATUS_HINT[status]} /><span className="ml-auto rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{columnItems.length}</span></div>
-    <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain" style={{ maxHeight: '65vh' }}>{columnItems.length === 0 ? <p className="rounded-xl border border-dashed border-slate-800 p-4 text-center text-xs text-slate-500">Tidak ada laporan.</p> : columnItems.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} Badge={Badge} formatDate={formatDate} />)}</div>
+    <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain" style={{ maxHeight: '65vh' }}>{columnItems.length === 0 ? <p className="rounded-xl border border-dashed border-slate-800 p-4 text-center text-xs text-slate-500">Tidak ada laporan.</p> : columnItems.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} Badge={Badge} formatDate={formatDate} draggable={!!onDropAction} dragging={draggingId === item.id} onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(item.id)); event.dataTransfer.effectAllowed = 'move'; setDraggingId(item.id); }} onDragEnd={() => setDraggingId(null)} />)}</div>
   </div>; })}</div>;
 }
 
@@ -295,6 +311,16 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
     else if (canEditReport(item, user)) onEdit(item);
     else openDetail(item);
   };
+  // What dropping a Kanban card on a different column actually does — the same priority a card's
+  // own primary button already follows (take unassigned cases, follow up on your own, reopen a
+  // closed one). Returns null when the viewer has no action available, so the drop is a no-op.
+  const primaryKanbanAction = (item) => {
+    if (user.role === 'admin' && !item.picId && handlingStatus(item) !== 'Selesai') return () => onAssign(item);
+    if (user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai') return () => onSelfAssign(item);
+    if (canFollowUp(item, user)) return () => onOpenPicAction(item, true);
+    if (canReopen(item, user)) return () => onReopen(item);
+    return null;
+  };
   const actions = (item, mobile = false) => <div className={mobile ? 'grid w-full grid-cols-2 gap-2' : 'flex flex-wrap items-center gap-1'}>
     {canFollowUp(item, user) ? <button disabled={busy} aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={mobile ? `${control} px-3 text-emerald-300 hover:bg-emerald-500/10` : `${iconControl} text-emerald-300 hover:bg-emerald-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail & Riwayat</span>}</button> : <button aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={mobile ? `${control} px-3 text-blue-300 hover:bg-blue-500/10` : `${iconControl} text-blue-300 hover:bg-blue-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail</span>}</button>}
     {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Edit laporan ${item.dokter || ''}`} onClick={() => onEdit(item)} className={mobile ? `${control} px-3 text-slate-300 hover:bg-slate-800` : `${iconControl} text-slate-300 hover:bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Edit</span>}</button>}
@@ -408,7 +434,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><details open={!mobile} className="group md:contents"><summary className="cursor-pointer rounded-lg px-2 py-2 text-xs font-semibold text-blue-300 md:hidden">Unduh & opsi</summary><div className="mt-2 flex flex-wrap items-center gap-2 md:mt-0">{(search || level !== 'Semua' || statusCaseFilter !== 'Semua' || workflowFilter !== 'Semua' || onlyMine || implantFilter !== 'Semua' || period !== 'all' || (rangeStart && rangeEnd)) && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Unduh CSV (buka di Excel)</button>{user.role === 'admin' && <button disabled={!filtered.length} onClick={exportByTeam} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Rekap per Team Pelapor</button>}{user.role === 'admin' && <button disabled={!filtered.length} onClick={exportByTindakan} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Rekap per Tindakan</button>}</div></details></div>
       </div>
       {canBulkPurge && selected.size > 0 && <div role="status" className="mx-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-900/50 bg-red-950/20 p-3 sm:mx-5"><p className="text-sm"><strong>{selected.size}</strong> laporan dipilih{selectedEligible.length !== selected.size && ` (${selectedEligible.length} bisa dihapus permanen)`}</p><div className="flex items-center gap-2"><button onClick={() => setSelected(new Set())} className={`${control} bg-slate-800 text-sm`}>Batal pilih</button><button onClick={openBulkPurge} className={`${control} bg-red-700 text-sm hover:bg-red-600`}><Trash2 aria-hidden="true" className="h-4 w-4" />Hapus permanen terpilih</button></div></div>}
-      {view === 'kanban' ? <KanbanBoard items={filtered} mobile={mobile} onOpen={openDetail} Badge={Badge} formatDate={formatDate} /> : <>
+      {view === 'kanban' ? <KanbanBoard items={filtered} mobile={mobile} onOpen={openDetail} Badge={Badge} formatDate={formatDate} onDropAction={mobile || user.role === 'pelapor' ? undefined : primaryKanbanAction} /> : <>
       {rows.length > 0 && <>
         <div tabIndex={0} role="region" aria-label="Tabel laporan komplain, geser untuk melihat semua kolom" className="hidden overflow-auto rounded-xl border border-slate-800 lg:max-h-[680px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 md:block"><table className="w-full min-w-[1120px] lg:min-w-0 table-fixed text-left text-sm"><caption className="sr-only">Laporan komplain diurutkan berdasarkan tanggal. Gunakan tombol detail untuk membaca masalah dan solusi lengkap.</caption><thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wider text-slate-400"><tr>{canBulkPurge && <th scope="col" className="w-10 px-3 py-3"><label className="sr-only" htmlFor="select-all-rows">Pilih semua laporan di halaman ini</label><input id="select-all-rows" type="checkbox" className="h-4 w-4 accent-red-500" checked={rows.length > 0 && rows.every((item) => selected.has(item.id))} onChange={() => { const pageIds = rows.map((item) => item.id); const allSelected = pageIds.every((id) => selected.has(id)); setSelected((previous) => { const next = new Set(previous); pageIds.forEach((id) => allSelected ? next.delete(id) : next.add(id)); return next; }); }} /></th>}{[['Dokter / Rumah Sakit', canBulkPurge ? 'w-[15%]' : 'w-[17%]'], ['Masalah / Tindakan', 'w-[23%]'], ['PIC', 'w-[11%]', 'PIC (Penanggung jawab) adalah petugas yang menangani laporan ini sampai selesai.'], ['Tanggal Kejadian', 'w-[11%]'], ['Klasifikasi', 'w-[13%]'], ['Status penanganan', 'w-[13%]'], ['Aksi', 'w-[12%]']].map(([label, width, hint]) => <th key={label} scope="col" className={`px-4 py-3 font-medium ${width}`}><span className="inline-flex items-center gap-1">{label}{hint && <FieldInfo text={hint} />}</span></th>)}</tr></thead><tbody className="divide-y divide-slate-800">{rows.map((item, index) => <tr key={item.id ?? index} className={`transition hover:bg-slate-800/40 ${index % 2 === 1 ? 'bg-slate-900/40' : ''} ${selected.has(item.id) ? 'bg-red-950/10' : ''}`}>
           {canBulkPurge && <td className="px-3 py-3.5 align-middle"><label className="sr-only" htmlFor={`select-row-${item.id}`}>Pilih laporan {item.dokter || ''}</label><input id={`select-row-${item.id}`} type="checkbox" disabled={item.id == null} className="h-4 w-4 accent-red-500" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} /></td>}

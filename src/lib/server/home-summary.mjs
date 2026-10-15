@@ -32,12 +32,19 @@ export async function reportSummary(user, { cursor = 0, limit = 3 } = {}) {
     : user.role === 'pelapor' ? data.filter((item) => item.pelaporId === user.id)
     : [];
   myComplaints.sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+  // "own" only covers reports already tied to this petugas (as PIC), so a brand-new unassigned
+  // report never shows up anywhere on their Beranda otherwise — this surfaces it separately,
+  // across the whole list, so petugas can see and take new incoming reports right away.
+  const incomingAll = user.role === 'petugas' ? data.filter((item) => !item.picId && handlingStatus(item) !== 'Selesai')
+    .sort((a, b) => String(b.createdAt || b.tanggal || '').localeCompare(String(a.createdAt || a.tanggal || '')))
+    : [];
   return {
     status: 'success',
-    counts: { own: own.length, active: active.length, attention: attention.length, waiting: waiting.length, completed: completed.length, myComplaints: myComplaints.length },
+    counts: { own: own.length, active: active.length, attention: attention.length, waiting: waiting.length, completed: completed.length, myComplaints: myComplaints.length, incoming: incomingAll.length },
     attention: priority,
     stale,
     myComplaints: myComplaints.slice(0, 8),
+    incoming: incomingAll.slice(0, 5),
     latest: { items: page, nextCursor: cursor + limit < rest.length ? cursor + limit : null, total: rest.length },
   };
 }
