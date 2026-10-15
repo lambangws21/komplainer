@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { initializeFirestore } from 'firebase-admin/firestore';
+import { initializeFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { firebaseApp } from './firebase-app.mjs';
 import { ApiError } from './api-error.mjs';
-import { REPORTS, BACKUPS, MENTIONS, mentionId, validId, backupId, mutateReport, canReadReport, publicReport, restrictedReport, validatePhotos } from './firestore-domain.mjs';
+import { REPORTS, BACKUPS, MENTIONS, REACTION_NOTICES, mentionId, reactionNoticeId, validId, backupId, mutateReport, publicReport, reactionDetails, validatePhotos } from './firestore-domain.mjs';
 export const usesFirestore = () => process.env.DATA_PROVIDER === 'firestore';
 export const firestoreDb = () => initializeFirestore(firebaseApp(), { preferRest: true });
 export function photoBucket() {
@@ -59,7 +59,7 @@ export async function executeFirestore(action, body, { user, accounts, db = fire
   if (action === 'list') {
     const snapshot = await reports.get();
     const items = snapshot.docs.map((doc) => doc.data()).filter((item) => !item.deletedAt && !item.migrationPending);
-    const data = items.map((item) => canReadReport(item, user) ? publicReport(item, accounts) : restrictedReport(item));
+    const data = items.map((item) => publicReport(item, accounts, user));
     // Admin-only, and only to drive the "Hapus permanen" eligibility marker in the table — one
     // batched getAll() keyed by each report's current version, not a query per row.
     if (user.role === 'admin' && items.length) {
@@ -123,14 +123,39 @@ export async function executeFirestore(action, body, { user, accounts, db = fire
   const existing = await ref.get();
   const old = existing.exists ? existing.data() : null;
   if (action === 'detail') {
-    if (!old || old.deletedAt || old.migrationPending || !canReadReport(old, user)) throw new ApiError('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
+    if (!old || old.deletedAt || old.migrationPending) throw new ApiError('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
     const history = await ref.collection('history').orderBy('tanggal', 'desc').get();
-    return { status: 'success', data: publicReport(old, accounts), history: history.docs.map((doc) => publicHistory(doc.data(), id)) };
+    return { status: 'success', data: { ...publicReport(old, accounts, user), reactionDetails: reactionDetails(old, accounts) }, history: history.docs.map((doc) => publicHistory(doc.data(), id)) };
+  }
+  // A lightweight social toggle, deliberately kept outside mutateReport — it shouldn't bump the
+  // report's version, write an audit history entry, or trigger a backup sync; it's not content.
+  // The single-field dot-path update (rather than read-modify-write on the whole reactions map)
+  // keeps two different users reacting at the same moment from clobbering each other.
+  if (action === 'react') {
+    if (!old || old.deletedAt || old.migrationPending) throw new ApiError('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
+    if (!['like', 'love'].includes(body.type)) throw new ApiError('Jenis reaksi tidak valid.');
+    const mine = old.reactions?.[user.id];
+    const removed = mine === body.type;
+    await ref.update({ [`reactions.${user.id}`]: removed ? FieldValue.delete() : body.type });
+    const reactions = { ...(old.reactions || {}) };
+    if (removed) delete reactions[user.id]; else reactions[user.id] = body.type;
+    // Notify the report's author and PIC (never the reactor themselves) — upserted per
+    // (report, target, reactor) so rapid like<->love switches update one notice instead of
+    // piling up, and taking the reaction back removes it instead of leaving a stale ping.
+    const noticeTargets = [...new Set([old.pelaporId, old.picId].filter((targetId) => targetId && targetId !== user.id))];
+    const reportLabel = [old.dokter, old.rumahSakit].filter(Boolean).join(' · ') || 'Laporan';
+    for (const targetUserId of noticeTargets) {
+      const noticeRef = db.collection(REACTION_NOTICES).doc(reactionNoticeId(id, targetUserId, user.id));
+      if (removed) await noticeRef.delete();
+      else await noticeRef.set({ id: noticeRef.id, reportId: id, reportLabel, byUserId: user.id, byNama: user.nama, type: body.type, targetUserId, createdAt: new Date().toISOString(), read: false });
+    }
+    const updated = { ...old, reactions };
+    return { status: 'success', data: { ...publicReport(updated, accounts, user), reactionDetails: reactionDetails(updated, accounts) }, id };
   }
   const incoming = validatePhotos(body.photos);
   const now = new Date().toISOString();
   const preflight = mutateReport(action, body, old, user, accounts, incoming.map(() => ({})), now);
-  if (preflight.duplicate) return { status: 'success', data: publicReport(old, accounts), id };
+  if (preflight.duplicate) return { status: 'success', data: publicReport(old, accounts, user), id };
   let uploaded = [];
   let committed = false;
   try {
@@ -158,7 +183,7 @@ export async function executeFirestore(action, body, { user, accounts, db = fire
     });
     committed = !result.duplicate;
     if (!committed) await cleanup(uploaded);
-    return { status: 'success', data: publicReport(result.item, accounts), id, action, mentions: result.mentions || [], ...(result.jobId ? { backupJobId: result.jobId } : {}) };
+    return { status: 'success', data: publicReport(result.item, accounts, user), id, action, mentions: result.mentions || [], ...(result.jobId ? { backupJobId: result.jobId } : {}) };
   } catch (error) {
     if (!committed) await cleanup(uploaded);
     throw error;
@@ -180,11 +205,11 @@ export async function uploadPhotos(photos, id, prefix = 'komplainer/reports') {
 export async function cleanupPhotos(photos) {
   if (photos.length) await Promise.allSettled(photos.map((photo) => photoBucket().file(photo.path).delete({ ignoreNotFound: true })));
 }
-export async function allowedPhoto(reportId, user, path, driveId, db = firestoreDb()) {
+export async function allowedPhoto(reportId, path, driveId, db = firestoreDb()) {
   const ref = db.collection(REPORTS).doc(validId(reportId));
   const doc = await ref.get();
   const item = doc.exists ? doc.data() : null;
-  if (!item || item.deletedAt || !canReadReport(item, user)) throw new ApiError('Foto tidak dapat diakses.', 404);
+  if (!item || item.deletedAt) throw new ApiError('Foto tidak dapat diakses.', 404);
   const history = await ref.collection('history').get();
   const refs = [...(item.photoRefs || [])];
   const ids = [...(item.fotoIds || [])];
@@ -204,6 +229,17 @@ export async function markMentionRead(user, id, db = firestoreDb()) {
   const ref = db.collection(MENTIONS).doc(validId(id));
   const doc = await ref.get();
   if (!doc.exists || doc.data().mentionedUserId !== user.id) throw new ApiError('Notifikasi tidak ditemukan.', 404);
+  await ref.update({ read: true });
+  return { status: 'success' };
+}
+export async function listReactionNotices(user, db = firestoreDb()) {
+  const snapshot = await db.collection(REACTION_NOTICES).where('targetUserId', '==', validId(user.id)).where('read', '==', false).get();
+  return snapshot.docs.map((doc) => doc.data()).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+export async function markReactionNoticeRead(user, id, db = firestoreDb()) {
+  const ref = db.collection(REACTION_NOTICES).doc(validId(id));
+  const doc = await ref.get();
+  if (!doc.exists || doc.data().targetUserId !== user.id) throw new ApiError('Notifikasi tidak ditemukan.', 404);
   await ref.update({ read: true });
   return { status: 'success' };
 }

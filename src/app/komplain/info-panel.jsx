@@ -10,7 +10,7 @@ const SECTIONS = [
   { title: 'Alur kerja laporan', items: [
     { icon: Workflow, color: 'text-amber-300 bg-amber-500/15', text: 'Baru → ditentukan PIC-nya → PIC mencatat tindak lanjut (RTL) → Selesai, dengan opsi dibuka kembali jika perlu' },
     { icon: Package, color: 'text-orange-300 bg-orange-500/15', text: 'Implant terkait terdeteksi otomatis dari isi laporan' },
-    { icon: Eye, color: 'text-sky-300 bg-sky-500/15', text: 'Semua pengguna bisa melihat status laporan lain (tanpa isi) untuk transparansi' },
+    { icon: Eye, color: 'text-sky-300 bg-sky-500/15', text: 'Semua pengguna bisa melihat seluruh laporan secara penuh — masalah, solusi, dan penanganannya — untuk transparansi tim' },
   ] },
   { title: 'Peran pengguna', items: [
     { icon: ClipboardList, color: 'text-blue-300 bg-blue-500/15', text: 'Pelapor — buat, edit, dan arsipkan laporan milik sendiri; pendaftaran perlu disetujui Admin' },

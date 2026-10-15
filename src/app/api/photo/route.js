@@ -25,7 +25,7 @@ export async function GET(request) {
     const id = params.get('id');
     if (usesFirestore()) {
       const scheduleId = params.get('schedule');
-      const photo = scheduleId ? await allowedSchedulePhoto(scheduleId, user, params.get('path')) : await allowedPhoto(params.get('report'), user, params.get('path'), id);
+      const photo = scheduleId ? await allowedSchedulePhoto(scheduleId, user, params.get('path')) : await allowedPhoto(params.get('report'), params.get('path'), id);
       if (photo.path) {
         const [bytes] = await photoBucket().file(photo.path).download();
         return new NextResponse(bytes, { headers: { 'Content-Type': photo.mimeType || 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });

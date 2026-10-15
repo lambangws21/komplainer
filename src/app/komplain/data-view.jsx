@@ -9,7 +9,8 @@ import FieldInfo from './field-info';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Table2, BarChart3, ArrowDownUp, Download, AlertCircle, Wrench, ListChecks, SlidersHorizontal, MoreHorizontal, Trash2 } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
+import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Table2, BarChart3, ArrowDownUp, Download, AlertCircle, CheckCircle2, Wrench, ListChecks, SlidersHorizontal, MoreHorizontal, Trash2, Heart, ThumbsUp, ArrowRight, Kanban as KanbanIcon, Users } from 'lucide-react';
 import { dateKey, shiftDate, shiftMonth, summarizeWeek, summarizeMonth, weekStart } from './weekly-summary.mjs';
 import { reportsToCsv, recapToCsv, groupRecap, downloadCsv } from './export.mjs';
 import WorkflowBadge from './workflow-badge';
@@ -77,8 +78,77 @@ function BackupBadge({ item, user }) {
   return <span title={`Status backup: ${label}${item.backupState === 'done' ? ' — bisa dihapus permanen' : ''}`} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes}`}>{label}</span>;
 }
 
-export default function DataView({ initialView = 'table', list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onOpenPicAction, onReopen, onExpired, onMarkRead, pendingDetailId, onPendingDetailHandled, onBulkPurge }) {
-  const [view, setView] = useState(initialView);
+// Keyed by the exact Indonesian action labels firestore-domain.mjs writes into each history
+// entry (see the `aksi` map in mutateReport) — lets the timeline dot read as "what kind of event"
+// at a glance instead of every entry looking the same.
+const HISTORY_ACTION_STYLE = {
+  'Laporan dibuat': ['border-blue-600 bg-blue-950 text-blue-300', PlusCircle],
+  'Laporan diedit': ['border-slate-600 bg-slate-800 text-slate-300', Pencil],
+  'Laporan diarsipkan': ['border-red-600 bg-red-950 text-red-300', Archive],
+  'PIC / tenggat diperbarui': ['border-violet-600 bg-violet-950 text-violet-300', UserRound],
+  'Tindak lanjut': ['border-amber-600 bg-amber-950 text-amber-300', MessageCircle],
+  'Laporan dibuka kembali': ['border-amber-600 bg-amber-950 text-amber-300', RotateCcw],
+};
+const HISTORY_ACTION_DEFAULT = ['border-slate-600 bg-slate-800 text-slate-300', CalendarDays];
+
+const KANBAN_COLUMN_ACCENT = { Baru: 'text-blue-300', Diproses: 'text-violet-300', Menunggu: 'text-amber-300', Selesai: 'text-emerald-300' };
+const KANBAN_DOT_COLOR = { Baru: 'bg-blue-400', Diproses: 'bg-violet-400', Menunggu: 'bg-amber-400', Selesai: 'bg-emerald-400' };
+// The PIC chooses between these two with a single checkbox when saving RTL ("Sedang menunggu
+// konfirmasi / pihak terkait") — easy to mix up since both mean "not done yet", so the column
+// headers spell out the difference instead of leaving it to be inferred from the label alone.
+const WORKFLOW_STATUS_HINT = {
+  Baru: 'Laporan baru masuk, belum ada PIC yang menangani.',
+  Diproses: 'PIC sudah ditugaskan dan sedang aktif menangani laporan ini.',
+  Menunggu: 'PIC sudah menangani, tapi sedang menunggu konfirmasi dari pihak lain (RS, tim lain, dll) sebelum bisa melanjutkan.',
+  Selesai: 'Penanganan sudah tuntas. Bisa dibuka kembali jika ternyata masalah muncul lagi.',
+};
+
+// A single card, shared by the desktop columns and the mobile per-status tab list. The whole
+// card opens the same detail dialog as "Lihat detail" in the table — Kanban here is a read view,
+// not a drag-and-drop board (status changes still go through assign/follow-up like everywhere
+// else), so a click is all it needs.
+function KanbanCard({ item, onOpen, Badge, formatDate }) {
+  const reactionTotal = (item.reactions?.like || 0) + (item.reactions?.love || 0);
+  return <div role="button" tabIndex={0} onClick={() => onOpen(item)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item); } }} className={`min-w-0 cursor-pointer rounded-xl border p-3 text-left shadow-sm transition hover:border-blue-500/60 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${workflowCardStyle(item)}`}>
+    <div className="flex items-start justify-between gap-2"><p className="break-words text-sm font-semibold leading-5 text-slate-100">{item.dokter || 'Dokter tidak tersedia'}</p><StatusCaseBadge statusCase={item.statusCase} /></div>
+    <p className="mt-0.5 break-words text-xs text-slate-400">{item.rumahSakit || 'Rumah sakit belum diisi'}</p>
+    <p className="mt-2 truncate text-xs font-medium text-violet-300">{item.tindakan || 'Tindakan belum diisi'}</p>
+    <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-slate-300">{item.komplain ? <InlineText text={item.komplain} /> : 'Belum diisi'}</p>
+    <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-slate-400"><UserRound aria-hidden="true" className="h-3 w-3 shrink-0" /><span className="truncate">{item.team || 'Team belum diisi'}</span><span aria-hidden="true">·</span><span className="min-w-0 truncate">Pelapor: {item.pelaporNama || '—'}</span></div>
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">{item.picId ? <><Avatar name={item.picNama} /><span className="truncate text-xs text-slate-300">{item.picNama}</span></> : <span className="text-xs font-semibold text-amber-300">Belum ada PIC</span>}</div>
+      {item.status && <Badge status={item.status} />}
+    </div>
+    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500"><span>{formatDate(item.tanggal)}</span>{reactionTotal > 0 && <span className="flex items-center gap-1 text-pink-300"><Heart aria-hidden="true" className="h-3 w-3 fill-current" />{reactionTotal}</span>}</div>
+  </div>;
+}
+function KanbanBoard({ items, mobile, onOpen, Badge, formatDate }) {
+  const [mobileTab, setMobileTab] = useState(WORKFLOW_STATUSES[0]);
+  const groups = useMemo(() => {
+    const map = new Map(WORKFLOW_STATUSES.map((status) => [status, []]));
+    for (const item of items) (map.get(handlingStatus(item)) || map.get('Baru')).push(item);
+    return map;
+  }, [items]);
+  if (mobile) {
+    const activeItems = groups.get(mobileTab) || [];
+    return <div className="space-y-3 p-3">
+      <div role="tablist" aria-label="Status laporan" className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 p-1">{WORKFLOW_STATUSES.map((status) => <button key={status} role="tab" title={WORKFLOW_STATUS_HINT[status]} aria-selected={mobileTab === status} onClick={() => setMobileTab(status)} className={`${control} shrink-0 px-3 text-xs ${mobileTab === status ? 'bg-slate-700 text-white' : 'text-slate-400'}`}>{status} ({(groups.get(status) || []).length})</button>)}</div>
+      <p className="px-1 text-xs leading-5 text-slate-400">{WORKFLOW_STATUS_HINT[mobileTab]}</p>
+      {activeItems.length === 0 ? <p className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">Tidak ada laporan berstatus {mobileTab}.</p> : <div className="space-y-2">{activeItems.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} Badge={Badge} formatDate={formatDate} />)}</div>}
+    </div>;
+  }
+  return <div role="region" aria-label="Papan kanban laporan" className="flex gap-3 overflow-x-auto p-3 sm:p-5">{WORKFLOW_STATUSES.map((status) => { const columnItems = groups.get(status) || []; return <div key={status} className="flex min-w-[240px] flex-1 flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+    <div className="flex items-center gap-1.5 px-1 py-1"><span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${KANBAN_DOT_COLOR[status]}`} /><h3 className={`text-sm font-semibold ${KANBAN_COLUMN_ACCENT[status]}`}>{status}</h3><FieldInfo text={WORKFLOW_STATUS_HINT[status]} /><span className="ml-auto rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{columnItems.length}</span></div>
+    <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain" style={{ maxHeight: '65vh' }}>{columnItems.length === 0 ? <p className="rounded-xl border border-dashed border-slate-800 p-4 text-center text-xs text-slate-500">Tidak ada laporan.</p> : columnItems.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} Badge={Badge} formatDate={formatDate} />)}</div>
+  </div>; })}</div>;
+}
+
+export default function DataView({ initialView = 'table', list, loaded, loading, loadError, busy, user, levels, Badge, formatDate, today, onCreate, onEdit, onDelete, onAssign, onSelfAssign, onOpenPicAction, onReopen, onExpired, onMarkRead, pendingDetailId, onPendingDetailHandled, onBulkPurge, onReact }) {
+  // Kanban is the nicer default on desktop (room for all 4 columns side by side); on mobile it'd
+  // just be a single-status list, so the dense table stays the default there. Only overrides the
+  // plain "Laporan" entry point — an explicit request for Rekap (initialView 'weekly', e.g. from
+  // Beranda's "Lihat rekap" link) is left alone.
+  const [view, setView] = useState(() => (initialView === 'table' && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) ? 'kanban' : initialView);
   const [periodMode, setPeriodMode] = useState('week');
   const [selectedDate, setSelectedDate] = useState(() => weekStart(today()));
   const [search, setSearch] = useState('');
@@ -161,6 +231,14 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
     } catch (error) { if (version === detailVersion.current) { setDetailError(error.message); if (error.code === 401) onExpired(); } }
     finally { if (version === detailVersion.current) setDetailLoading(false); }
   };
+  const [reacting, setReacting] = useState(false);
+  async function toggleReaction(type) {
+    if (!onReact || reacting || !detail?.id) return;
+    setReacting(true);
+    try { const updated = await onReact(detail.id, detail.version, type); if (updated) setDetail(updated); }
+    catch (error) { if (error.code !== 401) setDetailError(error.message || 'Gagal menyimpan reaksi.'); }
+    finally { setReacting(false); }
+  }
   useEffect(() => {
     if (!pendingDetailId) return;
     const item = list.find((entry) => entry.id === pendingDetailId);
@@ -174,11 +252,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
     const source = period === 'period' ? summary.current : list;
     const query = search.trim().toLocaleLowerCase('id-ID');
     const hasRange = !!(rangeStart && rangeEnd);
-    // Restricted rows (another reporter's report, visible only as a locked stub) only ever reach
-    // a pelapor's list — admin/petugas can read everything. They carry no usable content, so
-    // counting/filtering/exporting them would silently pad a pelapor's own stats with reports
-    // that aren't theirs.
-    return source.filter((item) => !item.restricted && (quickFilter === 'all' || (quickFilter === 'mine' ? item.picId === user.id && handlingStatus(item) !== 'Selesai' : handlingStatus(item) === 'Menunggu')) && (!onlyMine || item.picId === user.id) && (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || (level === 'Belum' ? !item.status : String(item.status || '').split(' - ')[0] === level)) && (statusCaseFilter === 'Semua' || item.statusCase === statusCaseFilter) && (implantFilter === 'Semua' || detectImplants(item).some((implant) => implant.key === implantFilter)) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
+    return source.filter((item) => (quickFilter === 'all' || (quickFilter === 'mine' ? item.picId === user.id && handlingStatus(item) !== 'Selesai' : handlingStatus(item) === 'Menunggu')) && (!onlyMine || item.picId === user.id) && (workflowFilter === 'Semua' || handlingStatus(item) === workflowFilter) && (level === 'Semua' || (level === 'Belum' ? !item.status : String(item.status || '').split(' - ')[0] === level)) && (statusCaseFilter === 'Semua' || item.statusCase === statusCaseFilter) && (implantFilter === 'Semua' || detectImplants(item).some((implant) => implant.key === implantFilter)) && (!hasRange || (dateKey(item.tanggal) && dateKey(item.tanggal) >= rangeStart && dateKey(item.tanggal) <= rangeEnd)) && ['dokter', 'rumahSakit', 'team', 'tindakan', 'komplain', 'jalanKeluar', 'picNama', 'pelaporNama'].some((key) => String(item[key] || '').toLocaleLowerCase('id-ID').includes(query)))
       .sort((a, b) => {
         const first = a.createdAt || (dateKey(a.tanggal) ? `${dateKey(a.tanggal)}T00:00:00` : '');
         const second = b.createdAt || (dateKey(b.tanggal) ? `${dateKey(b.tanggal)}T00:00:00` : '');
@@ -263,7 +337,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
     {(roleLegend.admin || roleLegend.pelapor || roleLegend.petugas || roleLegend.delegated) && <div aria-label="Legenda warna peran" className="hidden flex-wrap items-center gap-2 text-xs text-slate-400 md:flex"><span>Peran:</span>{roleLegend.admin && <RoleBadge role="admin" />}{roleLegend.pelapor && <RoleBadge role="pelapor" />}{roleLegend.petugas && <RoleBadge role="petugas" />}{roleLegend.delegated && <RoleBadge role="pelapor" pic />}</div>}
     <div className="flex items-center justify-between gap-2 sm:gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Pusat laporan</p><h2 className="mt-1 text-xl font-bold sm:text-2xl">Data & Rekap Komplain</h2><p className="mt-1 hidden text-sm text-slate-400 sm:block">{user.role === 'admin' ? 'Kelola seluruh laporan dan pantau penyelesaian setiap minggu.' : 'Laporan dan rekap ini hanya mencakup data yang dapat Anda akses.'}</p></div><button onClick={onCreate} className={`${control} shrink-0 bg-blue-600 hover:bg-blue-500`}><PlusCircle aria-hidden="true" className="h-4 w-4" />Buat laporan</button></div>
     <div aria-label="Tampilan data" className="flex w-full gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1 sm:w-fit">
-      {[['table', 'Data tabel', Table2], ['weekly', 'Rekap', BarChart3]].map(([value, label, Icon]) => <button key={value} ref={value === 'table' ? tableViewButton : undefined} aria-pressed={view === value} onClick={() => setView(value)} className={`${control} flex-1 whitespace-nowrap sm:flex-none ${view === value ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}><Icon aria-hidden="true" className="h-4 w-4" />{label}</button>)}
+      {[['table', 'Data tabel', Table2], ['kanban', 'Kanban', KanbanIcon], ['weekly', 'Rekap', BarChart3]].map(([value, label, Icon]) => <button key={value} ref={value === 'table' ? tableViewButton : undefined} aria-pressed={view === value} onClick={() => setView(value)} className={`${control} flex-1 whitespace-nowrap sm:flex-none ${view === value ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}><Icon aria-hidden="true" className="h-4 w-4" />{label}</button>)}
     </div>
 
     {view === 'table' && <div aria-label="Ringkasan hasil filter laporan" className="hidden grid-cols-4 gap-4 lg:grid">{[
@@ -334,6 +408,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-sm"><p role="status" className="text-slate-400">{ready ? `${filtered.length} laporan ditemukan` : 'Menunggu data laporan…'}</p><details open={!mobile} className="group md:contents"><summary className="cursor-pointer rounded-lg px-2 py-2 text-xs font-semibold text-blue-300 md:hidden">Unduh & opsi</summary><div className="mt-2 flex flex-wrap items-center gap-2 md:mt-0">{(search || level !== 'Semua' || statusCaseFilter !== 'Semua' || workflowFilter !== 'Semua' || onlyMine || implantFilter !== 'Semua' || period !== 'all' || (rangeStart && rangeEnd)) && <button onClick={reset} className={`${control} text-blue-300 hover:bg-blue-500/10`}>Reset filter</button>}<button disabled={!filtered.length} onClick={exportFiltered} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Unduh CSV (buka di Excel)</button>{user.role === 'admin' && <button disabled={!filtered.length} onClick={exportByTeam} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Rekap per Team Pelapor</button>}{user.role === 'admin' && <button disabled={!filtered.length} onClick={exportByTindakan} className={`${control} bg-slate-800 text-slate-200`}><Download aria-hidden="true" className="h-4 w-4" />Rekap per Tindakan</button>}</div></details></div>
       </div>
       {canBulkPurge && selected.size > 0 && <div role="status" className="mx-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-900/50 bg-red-950/20 p-3 sm:mx-5"><p className="text-sm"><strong>{selected.size}</strong> laporan dipilih{selectedEligible.length !== selected.size && ` (${selectedEligible.length} bisa dihapus permanen)`}</p><div className="flex items-center gap-2"><button onClick={() => setSelected(new Set())} className={`${control} bg-slate-800 text-sm`}>Batal pilih</button><button onClick={openBulkPurge} className={`${control} bg-red-700 text-sm hover:bg-red-600`}><Trash2 aria-hidden="true" className="h-4 w-4" />Hapus permanen terpilih</button></div></div>}
+      {view === 'kanban' ? <KanbanBoard items={filtered} mobile={mobile} onOpen={openDetail} Badge={Badge} formatDate={formatDate} /> : <>
       {rows.length > 0 && <>
         <div tabIndex={0} role="region" aria-label="Tabel laporan komplain, geser untuk melihat semua kolom" className="hidden overflow-auto rounded-xl border border-slate-800 lg:max-h-[680px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 md:block"><table className="w-full min-w-[1120px] lg:min-w-0 table-fixed text-left text-sm"><caption className="sr-only">Laporan komplain diurutkan berdasarkan tanggal. Gunakan tombol detail untuk membaca masalah dan solusi lengkap.</caption><thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wider text-slate-400"><tr>{canBulkPurge && <th scope="col" className="w-10 px-3 py-3"><label className="sr-only" htmlFor="select-all-rows">Pilih semua laporan di halaman ini</label><input id="select-all-rows" type="checkbox" className="h-4 w-4 accent-red-500" checked={rows.length > 0 && rows.every((item) => selected.has(item.id))} onChange={() => { const pageIds = rows.map((item) => item.id); const allSelected = pageIds.every((id) => selected.has(id)); setSelected((previous) => { const next = new Set(previous); pageIds.forEach((id) => allSelected ? next.delete(id) : next.add(id)); return next; }); }} /></th>}{[['Dokter / Rumah Sakit', canBulkPurge ? 'w-[15%]' : 'w-[17%]'], ['Masalah / Tindakan', 'w-[23%]'], ['PIC', 'w-[11%]', 'PIC (Penanggung jawab) adalah petugas yang menangani laporan ini sampai selesai.'], ['Tanggal Kejadian', 'w-[11%]'], ['Klasifikasi', 'w-[13%]'], ['Status penanganan', 'w-[13%]'], ['Aksi', 'w-[12%]']].map(([label, width, hint]) => <th key={label} scope="col" className={`px-4 py-3 font-medium ${width}`}><span className="inline-flex items-center gap-1">{label}{hint && <FieldInfo text={hint} />}</span></th>)}</tr></thead><tbody className="divide-y divide-slate-800">{rows.map((item, index) => <tr key={item.id ?? index} className={`transition hover:bg-slate-800/40 ${index % 2 === 1 ? 'bg-slate-900/40' : ''} ${selected.has(item.id) ? 'bg-red-950/10' : ''}`}>
           {canBulkPurge && <td className="px-3 py-3.5 align-middle"><label className="sr-only" htmlFor={`select-row-${item.id}`}>Pilih laporan {item.dokter || ''}</label><input id={`select-row-${item.id}`} type="checkbox" disabled={item.id == null} className="h-4 w-4 accent-red-500" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} /></td>}
@@ -358,6 +433,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
       </>}
       {!loading && !loadError && ready && rows.length === 0 && <div className="border-t border-slate-800 p-10 text-center"><Search aria-hidden="true" className="mx-auto h-8 w-8 text-slate-600" /><h3 className="mt-3 font-semibold">{list.length ? 'Tidak ada laporan yang cocok' : 'Belum ada laporan'}</h3><p className="mt-2 text-sm text-slate-400">{list.length ? 'Ubah kata kunci, tingkat keparahan, atau periode.' : 'Mulai dengan membuat laporan komplain pertama.'}</p><button onClick={list.length ? reset : onCreate} className={`${control} mt-4 bg-slate-800`}>{list.length ? 'Reset semua filter' : 'Buat laporan'}</button></div>}
       {filtered.length > 0 && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 px-3 py-3 sm:px-5 sm:py-4"><p className="hidden text-xs text-slate-400 sm:block">Menampilkan {(currentPage - 1) * effectivePageSize + 1}–{Math.min(currentPage * effectivePageSize, filtered.length)} dari {filtered.length} laporan</p><div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:gap-3"><label className="flex items-center gap-2 text-xs text-slate-400"><span className="hidden sm:inline">Tampilkan</span><select aria-label="Jumlah laporan per halaman" value={effectivePageSize} onChange={(event) => { (mobile ? setMobilePageSize : setPageSize)(Number(event.target.value)); setPage(1); }} className="min-h-9 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400">{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / halaman</option>)}</select></label><div className="flex items-center gap-2"><button disabled={currentPage === 1} aria-label="Halaman sebelumnya" onClick={() => setPage(currentPage - 1)} className={`${control} bg-slate-800 px-3`}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button><span className="text-sm tabular-nums">{currentPage} / {totalPages}</span><button disabled={currentPage === totalPages} aria-label="Halaman berikutnya" onClick={() => setPage(currentPage + 1)} className={`${control} bg-slate-800 px-3`}><ChevronRight aria-hidden="true" className="h-4 w-4" /></button></div></div></div>}
+      </>}
     </div>}
     <Dialog.Root open={detail !== null} onOpenChange={(open) => { if (!open) { detailVersion.current += 1; setDetail(null); } }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user.role} style={dialogStyle} onCloseAutoFocus={(event) => { event.preventDefault(); if (detailReturnFocus.current?.isConnected) detailReturnFocus.current.focus(); }} className={`${mobileDialog} max-w-2xl lg:max-w-5xl ${levels.find((item) => item.code === detail?.status)?.accent ? `border-l-4 ${levels.find((item) => item.code === detail?.status)?.accent}` : ''}`}>
       <div className="relative shrink-0 border-b border-slate-800 px-4 py-3 sm:px-6 sm:py-4">
@@ -366,8 +442,26 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
         <Dialog.Close aria-label="Tutup detail laporan" className={`${control} absolute right-2 top-2 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close>
       </div>
       {detail && <>
+      <div aria-label="Tindakan, implant, dan reaksi" className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/40 px-4 py-3 sm:px-6">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-300">Tindakan &amp; Implant</p>
+          <p className="mt-1 break-words text-sm font-semibold text-slate-100">{detail.tindakan || 'Tindakan belum diisi'}</p>
+          {detectImplants(detail).length > 0 && <div className="mt-2"><ImplantBadge item={detail} /></div>}
+        </div>
+        {onReact && <div className="flex shrink-0 items-center gap-2">
+          <button type="button" disabled={reacting} aria-pressed={detail.reactions?.mine === 'like'} onClick={() => toggleReaction('like')} className={`${control} min-h-9 gap-1.5 px-3 text-xs ${detail.reactions?.mine === 'like' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}><ThumbsUp aria-hidden="true" className="h-3.5 w-3.5" />{detail.reactions?.like || 0}</button>
+          <button type="button" disabled={reacting} aria-pressed={detail.reactions?.mine === 'love'} onClick={() => toggleReaction('love')} className={`${control} min-h-9 gap-1.5 px-3 text-xs ${detail.reactions?.mine === 'love' ? 'bg-pink-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}><Heart aria-hidden="true" className="h-3.5 w-3.5" />{detail.reactions?.love || 0}</button>
+          {detail.reactionDetails?.length > 0 && <Popover.Root>
+            <Popover.Trigger asChild><button type="button" aria-label="Lihat siapa yang memberi like atau love" className={`${control} min-h-9 w-9 px-0 bg-slate-800 text-slate-300 hover:bg-slate-700`}><Users aria-hidden="true" className="h-3.5 w-3.5" /></button></Popover.Trigger>
+            <Popover.Portal><Popover.Content sideOffset={6} collisionPadding={12} className="komplain-theme z-[70] max-w-[260px] space-y-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs leading-5 text-slate-200 shadow-xl">
+              {['like', 'love'].map((type) => { const names = detail.reactionDetails.filter((entry) => entry.type === type).map((entry) => entry.nama); return names.length > 0 && <p key={type}><span className="font-semibold">{type === 'like' ? '👍 Suka: ' : '❤️ Cinta: '}</span>{names.join(', ')}</p>; })}
+              <Popover.Arrow className="fill-slate-700" />
+            </Popover.Content></Popover.Portal>
+          </Popover.Root>}
+        </div>}
+      </div>
       <div aria-label="Bagian detail laporan" className="flex shrink-0 gap-1 border-b border-slate-800 bg-slate-900 px-3 py-2 sm:px-5 lg:hidden">{[['report', 'Ringkasan'], ['content', 'Isi laporan'], ['history', `Riwayat${detailLoading ? '' : ` (${history.length})`}`]].map(([value, label]) => <button key={value} aria-pressed={detailTab === value} onClick={() => setDetailTab(value)} className={`${control} min-w-0 flex-1 px-2 text-xs sm:text-sm lg:flex-none lg:min-w-40 ${detailTab === value ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>{label}</button>)}</div>
-      <div ref={detailScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:p-0" data-dialog-scroll>
+      <div ref={detailScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:p-0" data-dialog-scroll>
       {detailLoading && <p role="status" className="mb-3 text-xs text-blue-300 lg:col-span-2 lg:mb-0 lg:px-5 lg:py-2">Memperbarui informasi laporan…</p>}
       {detailError && <div role="alert" className="mb-3 rounded-xl border border-red-900 bg-red-950/20 p-3 text-xs text-red-300 lg:col-span-2"><p>{detailError}</p><p className="mt-1 text-slate-400">Informasi yang tampil belum dapat dipastikan sebagai versi terbaru.</p><button onClick={() => openDetail(detail, false)} className={`${control} mt-2 bg-slate-800 text-xs`}>Coba lagi</button></div>}
       <div className="min-h-0 min-w-0 lg:overflow-y-auto lg:border-r lg:border-slate-800 lg:p-5">
@@ -390,9 +484,20 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
         const pelaporAuthor = detail.pelaporRole ? { role: detail.pelaporRole, pic: false } : null;
         const picAuthor = detail.picRole ? { role: detail.picRole, pic: true } : null;
         const followUpAuthor = handlingStatus(detail) === 'Baru' ? pelaporAuthor : picAuthor;
-        return [['Masalah', detail.komplain, 'border-red-900/50 bg-red-950/20 text-red-200', AlertCircle, pelaporAuthor], ['Solusi awal pelapor', initialSolution(detail), 'border-teal-800/60 bg-teal-950/30 text-teal-200', Wrench, pelaporAuthor], ['Hasil penanganan PIC', handlingSolution(detail), 'border-emerald-900/50 bg-emerald-950/20 text-emerald-200', Wrench, picAuthor], ['Rencana tindak lanjut (RTL)', detail.penangananSelanjutnya, 'border-violet-900/50 bg-violet-950/20 text-violet-200', ListChecks, followUpAuthor]].map(([label, value, color, Icon, author]) => <div key={label} className={`min-w-0 rounded-xl border p-3 sm:p-4 ${label === 'Masalah' ? 'lg:col-span-2' : ''} ${color}`}><h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold"><Icon aria-hidden="true" className="h-4 w-4 shrink-0" />{label}{author && value && <RoleBadge role={author.role} pic={author.pic} />}</h3>{value ? <FormattedText text={value} className="mt-2 text-sm leading-6 text-slate-200" /> : <p className="mt-2 text-xs leading-5 text-slate-400">Belum diisi</p>}</div>);
+        // Success cases read as a report, not a problem — same card, different framing: green
+        // instead of red, a checkmark instead of an alert triangle, "Laporan" instead of "Masalah".
+        const isSukses = detail.statusCase === 'Sukses';
+        const primaryLabel = isSukses ? '🟢 Laporan' : 'Masalah';
+        const primaryColor = isSukses ? 'border-emerald-700/60 bg-emerald-950/30 text-emerald-100' : 'border-red-900/50 bg-red-950/20 text-red-200';
+        const PrimaryIcon = isSukses ? CheckCircle2 : AlertCircle;
+        const secondary = [['Solusi awal pelapor', initialSolution(detail), 'border-teal-800/60 bg-teal-950/30 text-teal-200', Wrench, pelaporAuthor], ['Hasil penanganan PIC', handlingSolution(detail), 'border-emerald-900/50 bg-emerald-950/20 text-emerald-200', Wrench, picAuthor], ['Rencana tindak lanjut (RTL)', detail.penangananSelanjutnya, 'border-violet-900/50 bg-violet-950/20 text-violet-200', ListChecks, followUpAuthor]];
+        return <>
+          <div className={`min-w-0 rounded-xl border p-3 sm:p-4 lg:col-span-2 ${primaryColor}`}><h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold"><PrimaryIcon aria-hidden="true" className="h-4 w-4 shrink-0" />{primaryLabel}{pelaporAuthor && detail.komplain && <RoleBadge role={pelaporAuthor.role} pic={pelaporAuthor.pic} />}</h3>{detail.komplain ? <FormattedText text={detail.komplain} className="mt-2 text-sm leading-6 text-slate-200" /> : <p className="mt-2 text-xs leading-5 text-slate-400">Belum diisi</p>}</div>
+          {secondary.map(([label, value, color, Icon, author]) => value
+            ? <div key={label} className={`min-w-0 rounded-xl border p-3 sm:p-4 ${color}`}><h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold"><Icon aria-hidden="true" className="h-4 w-4 shrink-0" />{label}{author && <RoleBadge role={author.role} pic={author.pic} />}</h3><FormattedText text={value} className="mt-2 text-sm leading-6 text-slate-200" /></div>
+            : <div key={label} title={`${label}: belum diisi`} className="flex min-w-0 items-center gap-2 rounded-xl border border-dashed border-slate-800 px-3 py-2 text-xs text-slate-500"><Icon aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">{label} — belum diisi</span></div>)}
+        </>;
       })()}
-      <section className="min-w-0 rounded-xl border border-slate-800 bg-slate-950/20 p-3 lg:col-span-2"><h3 className="text-sm font-semibold">Implant & Tindakan</h3><p className="mt-2 break-words text-sm text-slate-200">{detail.tindakan || 'Tindakan belum diisi'}</p>{detectImplants(detail).length > 0 && <div className="mt-2"><ImplantBadge item={detail} /></div>}</section>
       {detail.fotoUrls?.length > 0 && <div className="min-w-0 lg:col-span-2 lg:rounded-xl lg:border lg:border-slate-800 lg:p-3"><p className="mb-2 text-sm font-semibold">Foto laporan ({detail.fotoUrls.length})</p><PhotoGallery urls={detail.fotoUrls} label="Foto laporan" /></div>}
       </div>
       </div>
@@ -402,14 +507,21 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
         {detailLoading && <div className="mt-3"><LoadingState compact title="Memuat riwayat…" description="Mengambil perkembangan terbaru laporan ini." /></div>}
 
         {!detailLoading && !detailError && !history.length && <p className="mt-3 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Belum ada riwayat perubahan. Aktivitas berikutnya akan tercatat di sini.</p>}
-        <ol className="mt-4 space-y-4">{history.map((entry) => {
+        <ol className="mt-4">{history.map((entry, index) => {
           const changes = historyChanges(entry.detail);
           const fields = editedFieldLabels(entry.detail);
-          return <li key={entry.id} className="relative ml-1 border-l-2 border-blue-800 pl-4"><span aria-hidden="true" className="absolute -left-[5px] top-5 h-2 w-2 rounded-full bg-blue-400" /><article className="min-w-0 rounded-xl border border-slate-700 bg-slate-950/30 p-3 sm:p-4">
+          const picChange = changes.find((change) => change.key === 'picNama');
+          const otherChanges = changes.filter((change) => change.key !== 'picNama');
+          const [dotColor, ActionIcon] = HISTORY_ACTION_STYLE[entry.aksi] || HISTORY_ACTION_DEFAULT;
+          return <li key={entry.id} className={`relative pb-5 pl-11 last:pb-0`}>
+            {index < history.length - 1 && <span aria-hidden="true" className="absolute left-[15px] top-8 bottom-0 w-px bg-slate-700" />}
+            <span aria-hidden="true" className={`absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-slate-950 ${dotColor}`}><ActionIcon aria-hidden="true" className="h-4 w-4" /></span>
+            <article className="min-w-0 rounded-xl border border-slate-700 bg-slate-950/30 p-3 sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-sm font-semibold text-slate-100">{entry.aksi}</h4><time dateTime={Number.isNaN(new Date(entry.tanggal).getTime()) ? undefined : new Date(entry.tanggal).toISOString()} className="text-xs text-slate-400">{historyDate(entry.tanggal)}</time></div>
             <p className="mt-2 flex items-center gap-1.5 break-words text-xs text-slate-300"><UserRound aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{entry.nama || 'Pengguna'}</p>
             {fields.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Kolom yang diedit">{fields.map((field) => <span key={field} className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-300">{field}</span>)}</div>}
-            {changes.length > 0 && <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-blue-300">Detail perubahan ({changes.length})</summary><dl className="mt-2 space-y-3">{changes.map((change) => <div key={change.key}><dt className="mb-1.5 text-xs font-medium text-slate-300">{historyFieldLabel(change.key)}</dt><dd className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-1"><div className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 p-2"><span className="text-[10px] uppercase tracking-wide text-slate-400">Sebelum</span><FormattedText text={String(formatHistoryValue(change.key, change.before, levels, formatDate))} className="mt-1 break-words text-xs leading-5 text-slate-400" /></div><div className="min-w-0 rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-2"><span className="text-[10px] uppercase tracking-wide text-emerald-300">Sesudah</span><FormattedText text={String(formatHistoryValue(change.key, change.after, levels, formatDate))} className="mt-1 break-words text-xs leading-5 text-slate-200" /></div></dd></div>)}</dl></details>}
+            {picChange && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="text-slate-400">PIC:</span><span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-slate-300">{formatHistoryValue('picNama', picChange.before, levels, formatDate)}</span><ArrowRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-500" /><span className="rounded-full border border-violet-700 bg-violet-950/40 px-2.5 py-1 font-semibold text-violet-200">{formatHistoryValue('picNama', picChange.after, levels, formatDate)}</span></div>}
+            {otherChanges.length > 0 && <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-blue-300">Detail perubahan ({otherChanges.length})</summary><dl className="mt-2 space-y-3">{otherChanges.map((change) => <div key={change.key}><dt className="mb-1.5 text-xs font-medium text-slate-300">{historyFieldLabel(change.key)}</dt><dd className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-1"><div className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 p-2"><span className="text-[10px] uppercase tracking-wide text-slate-400">Sebelum</span><FormattedText text={String(formatHistoryValue(change.key, change.before, levels, formatDate))} className="mt-1 break-words text-xs leading-5 text-slate-400" /></div><div className="min-w-0 rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-2"><span className="text-[10px] uppercase tracking-wide text-emerald-300">Sesudah</span><FormattedText text={String(formatHistoryValue(change.key, change.after, levels, formatDate))} className="mt-1 break-words text-xs leading-5 text-slate-200" /></div></dd></div>)}</dl></details>}
             {entry.catatan && <FormattedText text={entry.catatan} className={`mt-3 ${historyNote}`} />}
             {entry.fotoUrls?.length > 0 && <div className="mt-3"><PhotoGallery urls={entry.fotoUrls} label="Foto tindak lanjut" thumbClassName="h-16 w-16" /></div>}
           </article></li>;

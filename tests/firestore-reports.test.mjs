@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mutateReport, validatePhotos, publicReport, restrictedReport, REPORTS, BACKUPS } from '../src/lib/server/firestore-domain.mjs';
+import { mutateReport, validatePhotos, publicReport, REPORTS, BACKUPS } from '../src/lib/server/firestore-domain.mjs';
 import { executeFirestore } from '../src/lib/server/firestore-store.mjs';
 import { syncBackupJob, cronAuthorized, retryDelay } from '../src/lib/server/firebase-backup.mjs';
 import { fakeFirestore } from './helpers/firestore-fixture.mjs';
@@ -19,7 +19,9 @@ test('Firestore domain requires hospital and approval; reporter cannot set sever
 });
 test('permissions, version conflict, delegated reporter PIC and complete/reopen/archive',()=>{
  let item=mutateReport('create',body(),null,reporter,accounts,[],now).item;
- assert.throws(()=>mutateReport('update',{...item},item,stranger,accounts,[],now),e=>e.code===404);
+ // Reports are readable by every account (team-wide transparency) — a non-owner, non-admin
+ // stranger can see this report but still can't edit it, hence 403 rather than 404.
+ assert.throws(()=>mutateReport('update',{...item},item,stranger,accounts,[],now),e=>e.code===403);
  assert.throws(()=>mutateReport('assign',{id:item.id,version:1,picId:pic.id},item,reporter,accounts,[],now),e=>e.code===403);
  assert.throws(()=>mutateReport('assign',{version:1,picId:stranger.id},item,admin,accounts,[],now),/Pilih petugas/);
  item=mutateReport('assign',{version:1,picId:reporter.id},item,admin,accounts,[],now).item;
@@ -32,10 +34,10 @@ test('permissions, version conflict, delegated reporter PIC and complete/reopen/
  assert.equal(item.selesaiPada,'');
  item=mutateReport('delete',{version:4},item,admin,accounts,[],now).item; assert.ok(item.deletedAt);
 });
-test('list projections conceal contents and expose only authenticated photo paths',()=>{
+test('publicReport strips internal storage fields and exposes only authenticated photo paths',()=>{
  const item=mutateReport('create',body(),null,reporter,accounts,[{path:'komplainer/reports/x/photo'}],now).item;
- assert.equal(restrictedReport(item).komplain,undefined);
  const projected=publicReport(item,accounts); assert.equal(projected.photoRefs,undefined); assert.equal(projected.photoCount,undefined); assert.match(projected.fotoUrls[0],/^\/api\/photo\?report=/);
+ assert.equal(projected.komplain,item.komplain);
 });
 test('photo payload validation rejects non-image bytes, excess count and lifetime cap',()=>{
  assert.throws(()=>validatePhotos([{mimeType:'image/jpeg',base64:Buffer.from('not image').toString('base64')}]),/Foto tidak valid/);

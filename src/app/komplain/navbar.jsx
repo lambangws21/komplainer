@@ -1,6 +1,6 @@
 'use client';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone, Compass } from 'lucide-react';
+import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone, Compass, Heart, ThumbsUp } from 'lucide-react';
 import RoleBadge from './role-badge';
 import InfoPanel from './info-panel';
 import PushToggle from './push-toggle';
@@ -9,12 +9,12 @@ import ThemeToggle from './theme-toggle';
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, announcementCount = 0, onToggleAnnouncements, onOpenTour }) {
+export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, reactionNotice = [], onOpenReactionNotice, onMarkAllReactionsRead, announcementCount = 0, onToggleAnnouncements, onOpenTour }) {
   const showNav = user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
   // Admin gets the full set here too — on small screens AdminSidebar is hidden (lg:block), so
   // this pill row is the only way to reach Pengguna/Pengumuman/Backup on mobile.
   const tabs = [['form', 'Beranda'], ['table', 'Laporan'], ...(user?.role === 'admin' ? [['users', 'Pengguna'], ['announcements', 'Pengumuman'], ['backup', 'Backup']] : [])];
-  const unreadCount = unreadItems.length;
+  const unreadCount = unreadItems.length + reactionNotice.length;
   return <header className="sticky top-0 z-30 -mx-3 -mt-4 border-b border-slate-800 bg-slate-900/95 px-3 py-4 backdrop-blur sm:-mx-7 sm:-mt-8 sm:px-5">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
       <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Monitoring</p><h1 className="text-xl font-bold sm:text-2xl">Laporan Komplain</h1></div>
@@ -29,10 +29,18 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
           <DropdownMenu.Portal><DropdownMenu.Content data-role={user?.role || 'pelapor'} align="end" sideOffset={8} className="komplain-theme z-50 w-80 max-w-[90vw] rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
             <div className="flex items-center justify-between gap-2 px-2 py-1.5"><p className="text-sm font-semibold">Laporan belum dibuka</p>{unreadCount > 0 && <DropdownMenu.Item onSelect={onMarkAllRead} className="cursor-pointer text-xs font-semibold text-blue-300 outline-none hover:underline">Tandai semua dibaca</DropdownMenu.Item>}</div>
             <DropdownMenu.Separator className="my-1 h-px bg-slate-800" />
-            {unreadCount === 0 ? <p className="px-2 py-3 text-sm text-slate-400">Tidak ada laporan baru.</p> : <div className="max-h-80 space-y-1 overflow-y-auto">{unreadItems.map((item) => <DropdownMenu.Item key={item.id} onSelect={() => onOpenNotification(item)} className="flex cursor-pointer flex-col gap-0.5 rounded-lg px-2 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800">
+            {unreadItems.length === 0 ? <p className="px-2 py-3 text-sm text-slate-400">Tidak ada laporan baru.</p> : <div className="max-h-80 space-y-1 overflow-y-auto">{unreadItems.map((item) => <DropdownMenu.Item key={item.id} onSelect={() => onOpenNotification(item)} className="flex cursor-pointer flex-col gap-0.5 rounded-lg px-2 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800">
               <span className="flex items-center justify-between gap-2"><span className="flex min-w-0 items-center gap-1.5 truncate font-semibold"><Inbox aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-blue-300" />{item.dokter || 'Dokter tidak tersedia'}</span><span className="shrink-0 text-xs text-slate-400">{formatDate(item.tanggal)}</span></span>
               <span className="truncate text-xs text-slate-400">{item.tindakan || '—'} · {item.pelaporNama || 'Pengguna'}</span>
             </DropdownMenu.Item>)}</div>}
+            {reactionNotice.length > 0 && <>
+              <DropdownMenu.Separator className="my-1 h-px bg-slate-800" />
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5"><p className="text-sm font-semibold">Like &amp; Love</p><DropdownMenu.Item onSelect={onMarkAllReactionsRead} className="cursor-pointer text-xs font-semibold text-blue-300 outline-none hover:underline">Tandai semua dibaca</DropdownMenu.Item></div>
+              <div className="max-h-56 space-y-1 overflow-y-auto">{reactionNotice.map((item) => <DropdownMenu.Item key={item.id} onSelect={() => onOpenReactionNotice(item)} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800">
+                {item.type === 'love' ? <Heart aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-pink-300" /> : <ThumbsUp aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-blue-300" />}
+                <span className="min-w-0 truncate"><strong>{item.byNama}</strong> {item.type === 'love' ? 'menyukai (love)' : 'menyukai (like)'} laporan <span className="text-slate-400">{item.reportLabel}</span></span>
+              </DropdownMenu.Item>)}</div>
+            </>}
           </DropdownMenu.Content></DropdownMenu.Portal>
         </DropdownMenu.Root>}
         {showNav && announcementCount > 0 && <button onClick={onToggleAnnouncements} aria-label={`Pengumuman, ${announcementCount} aktif`} className={`${buttonClass} relative border border-amber-500/40 bg-amber-500/10 px-2.5 text-amber-200 hover:bg-amber-500/20`}>

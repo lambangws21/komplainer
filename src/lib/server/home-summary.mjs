@@ -11,7 +11,7 @@ const STALE_MS = 3 * 24 * 60 * 60 * 1000;
 // purpose-built payload instead of the entire list used by the Table/Recap tabs.
 export async function reportSummary(user, { cursor = 0, limit = 3 } = {}) {
   const { data } = await callReports('list');
-  const own = data.filter((item) => !item.restricted && (user.role === 'admin' || item.picId === user.id || item.pelaporId === user.id));
+  const own = data.filter((item) => user.role === 'admin' || item.picId === user.id || item.pelaporId === user.id);
   const active = own.filter((item) => handlingStatus(item) !== 'Selesai');
   const attention = active.filter((item) => user.role === 'admin' ? !item.picId || handlingStatus(item) === 'Menunggu' : item.picId === user.id);
   const waiting = active.filter((item) => handlingStatus(item) === 'Menunggu');
@@ -28,8 +28,8 @@ export async function reportSummary(user, { cursor = 0, limit = 3 } = {}) {
   // Every complaint this user owns end-to-end — as PIC (petugas) or as the original reporter
   // (pelapor) — active or already Selesai. "Perlu tindakan Anda" above only covers the
   // still-open subset, so this is the fuller "what's mine" picture, not just what's pending.
-  const myComplaints = user.role === 'petugas' ? data.filter((item) => !item.restricted && item.picId === user.id)
-    : user.role === 'pelapor' ? data.filter((item) => !item.restricted && item.pelaporId === user.id)
+  const myComplaints = user.role === 'petugas' ? data.filter((item) => item.picId === user.id)
+    : user.role === 'pelapor' ? data.filter((item) => item.pelaporId === user.id)
     : [];
   myComplaints.sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   return {

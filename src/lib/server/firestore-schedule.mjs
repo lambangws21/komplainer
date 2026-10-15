@@ -1,7 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { ApiError } from './api-error.mjs';
-import { REPORTS, validId, text, date, canReadReport, validatePhotos } from './firestore-domain.mjs';
+import { REPORTS, validId, text, date, validatePhotos } from './firestore-domain.mjs';
 import { firestoreDb, uploadPhotos, cleanupPhotos } from './firestore-store.mjs';
 import { syncEvent } from './google-calendar.mjs';
 
@@ -52,7 +52,7 @@ async function scheduleFields(body, user, accounts, db) {
     reportId = validId(body.reportId);
     const reportDoc = await db.collection(REPORTS).doc(reportId).get();
     const report = reportDoc.exists ? reportDoc.data() : null;
-    if (!report || report.deletedAt || !canReadReport(report, user)) throw new ApiError('Laporan terkait tidak ditemukan atau tidak dapat diakses.', 404);
+    if (!report || report.deletedAt) throw new ApiError('Laporan terkait tidak ditemukan atau tidak dapat diakses.', 404);
   }
   return { title, location, locationLat, locationLng, notes, date: eventDate, startTime, endTime, picId: pic?.id || '', picNama: pic?.nama || '', reportId };
 }

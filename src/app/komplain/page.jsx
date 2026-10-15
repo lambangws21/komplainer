@@ -126,8 +126,13 @@ export default function KomplainPage() {
   const [criticalNotice, setCriticalNotice] = useState([]);
   const criticalSeenRef = useRef(new Set());
   const [mentionables, setMentionables] = useState([]);
+  // Suggestions only (a <datalist>, not a <select>) — Team Pelapor still accepts free text, but
+  // typing offers registered names first so people pick a consistent one instead of a typo'd one.
+  const teamNameSuggestions = useMemo(() => [...new Set([user?.nama, ...mentionables.map((account) => account.nama)].filter(Boolean))], [user?.nama, mentionables]);
   const [mentionNotice, setMentionNotice] = useState([]);
   const mentionSeenRef = useRef(new Set());
+  const [reactionNotice, setReactionNotice] = useState([]);
+  const reactionSeenRef = useRef(new Set());
   const [announcementNotice, setAnnouncementNotice] = useState([]);
   const [announcementBannerOpen, setAnnouncementBannerOpen] = useState(true);
   const announcementReadRef = useRef(new Set());
@@ -216,7 +221,7 @@ export default function KomplainPage() {
     setUser(null); setList([]); setAssignees([]); setLoaded(false); setLoading(false);
     setModal(null); setEditItem(null); setWorkflowItem(null); setForm(newForm()); setFormPhotos([]); setPicPhotos([]);
     setAssignedNotice([]); setIncomingNotice([]); setCriticalNotice([]); criticalSeenRef.current = new Set(); setReadIds(new Set());
-    setMentionables([]); setMentionNotice([]); mentionSeenRef.current = new Set(); setAnnouncementNotice([]); setAnnouncementError(''); setAnnouncementDismissing(null); announcementSeenRef.current = new Set(); announcementReadRef.current = new Set(); setAnnouncementBannerOpen(true);
+    setMentionables([]); setMentionNotice([]); mentionSeenRef.current = new Set(); setReactionNotice([]); reactionSeenRef.current = new Set(); setAnnouncementNotice([]); setAnnouncementError(''); setAnnouncementDismissing(null); announcementSeenRef.current = new Set(); announcementReadRef.current = new Set(); setAnnouncementBannerOpen(true);
     setSuccessText(''); setSavedReportId(null); setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
   }, []);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -306,9 +311,9 @@ export default function KomplainPage() {
   const fetchNotices = useCallback(async () => {
     const accountId = userRef.current?.id;
     if (!accountId) return;
-    const [mentions, announcements] = await Promise.allSettled([apiRequest('/api/mentions'), apiRequest('/api/announcements')]);
+    const [mentions, announcements, reactions] = await Promise.allSettled([apiRequest('/api/mentions'), apiRequest('/api/announcements'), apiRequest('/api/reactions')]);
     if (userRef.current?.id !== accountId) return;
-    if ([mentions, announcements].some((result) => result.status === 'rejected' && result.reason.code === 401)) { endSession(); return; }
+    if ([mentions, announcements, reactions].some((result) => result.status === 'rejected' && result.reason.code === 401)) { endSession(); return; }
     if (mentions.status === 'fulfilled') {
       const items = mentions.value.data || [];
       if (items.some((item) => !mentionSeenRef.current.has(item.id))) playNotificationChime();
@@ -320,6 +325,12 @@ export default function KomplainPage() {
       if (activeAnnouncements.some((item) => !announcementSeenRef.current.has(item.id))) { setAnnouncementBannerOpen(true); playNotificationChime(); }
       announcementSeenRef.current = new Set(activeAnnouncements.map((item) => item.id));
       setAnnouncementNotice(activeAnnouncements);
+    }
+    if (reactions.status === 'fulfilled') {
+      const items = reactions.value.data || [];
+      if (items.some((item) => !reactionSeenRef.current.has(item.id))) playNotificationChime();
+      reactionSeenRef.current = new Set(items.map((item) => item.id));
+      setReactionNotice(items);
     }
   }, [endSession]);
   useEffect(() => {
@@ -467,9 +478,10 @@ export default function KomplainPage() {
   function openPicAction(item, editMode = false) {
     markRead(item.id);
     const enterEdit = editMode && handlingStatus(item) !== 'Selesai';
+    const draft = handlingDraft(item);
     setPicEditMode(enterEdit); setShowPicHistory(false); setPicPhotos([]);
     setWorkflowItem(item);
-    setWorkflow(handlingDraft(item));
+    setWorkflow(draft);
     openModal('picAction');
     picHistoryLoadedId.current = null; setPicHistory([]); setPicDetailError('');
     if (enterEdit) loadPicHistory(item);
@@ -489,6 +501,16 @@ export default function KomplainPage() {
     const stillCritical = !item.deletedAt && item.statusCase === 'Ada Kendala' && !item.picId && handlingStatus(item) !== 'Selesai';
     if (!stillCritical) setCriticalNotice((queue) => queue.filter((entry) => entry.id !== item.id));
     mutateSummary();
+  }
+  // The detail dialog's own local `detail` state isn't derived from `list`, so the caller needs
+  // the fresh report back to update what's actually on screen — patching `list` here just keeps
+  // the table in sync for whenever that dialog closes.
+  async function react(id, version, type) {
+    try {
+      const result = await apiRequest('/api/komplain', postJson({ action: 'react', id, version, type }));
+      applyMutationResult(result.data);
+      return result.data;
+    } catch (error) { if (error.code === 401) endSession(); throw error; }
   }
   // DataView owns the selection UI and confirmation dialog; this just runs the API call and
   // reconciles whichever ids actually succeeded (the server validates each item independently —
@@ -590,6 +612,10 @@ export default function KomplainPage() {
     setMentionNotice((queue) => queue.filter((entry) => entry.id !== item.id));
     try { await apiRequest('/api/mentions', postJson({ action: 'read', id: item.id })); } catch { /* Will reappear on next poll if the dismiss failed to save. */ }
   }
+  async function dismissReactionNotice(item) {
+    setReactionNotice((queue) => queue.filter((entry) => entry.id !== item.id));
+    try { await apiRequest('/api/reactions', postJson({ action: 'read', id: item.id })); } catch { /* Will reappear on next poll if the dismiss failed to save. */ }
+  }
   async function dismissAnnouncement(item) {
     if (announcementDismissLock.current) return;
     announcementDismissLock.current = true;
@@ -609,13 +635,13 @@ export default function KomplainPage() {
     catch (error) { if (error.code === 401) endSession('Anda sudah keluar.'); else { endSession('Cookie lokal sudah dihapus. Tutup perangkat bersama setelah selesai.'); setAuthError(error.message); } }
     finally { setLoggingOut(false); }
   }
-  const renderFormField = ([name, label, type]) => name === 'tindakan' ? <div key={name} className="sm:col-span-2"><label htmlFor="komplain-tindakan" className="mb-2 block text-sm font-medium">{label}<span aria-hidden="true"> *</span></label><select id="komplain-tindakan" required value={customTindakan ? 'Lainnya' : form.tindakan} onChange={(event) => { const next = event.target.value; if (next === 'Lainnya') { setCustomTindakan(true); setForm({ ...form, tindakan: '' }); } else { setCustomTindakan(false); setForm({ ...form, tindakan: next }); } }} className={inputClass}><option value="" disabled>Pilih tindakan…</option>{TINDAKAN_PRESETS.map((option) => <option key={option} value={option}>{option}</option>)}<option value="Lainnya">Tindakan lainnya…</option></select>{customTindakan && <input id="komplain-tindakan-lainnya" aria-label="Tindakan lainnya" type="text" placeholder="Ketik tindakan lainnya…" autoComplete="off" required maxLength={500} value={form.tindakan} onChange={(event) => setForm({ ...form, tindakan: event.target.value })} className={`${inputClass} mt-2`} />}</div> : <div key={name} className={type === 'textarea' ? `min-w-0 sm:col-span-2 ${OPTIONAL_FIELDS.includes(name) ? 'lg:col-span-1' : ''}` : 'min-w-0'}><label id={`komplain-${name}-label`} htmlFor={`komplain-${name}`} className="mb-2 flex items-center gap-1.5 text-sm font-medium">{label}{!OPTIONAL_FIELDS.includes(name) && <span aria-hidden="true"> *</span>}<FieldInfo text={FIELD_HINTS[name]} /></label>{type === 'textarea' ? <><VisualTextEditor ref={(el) => { textareaRefs.current[name] = el; }} id={`komplain-${name}`} name={name} required={!OPTIONAL_FIELDS.includes(name)} maxLength={5000} rows={3} placeholder={name === 'komplain' ? 'Ceritakan apa yang terjadi dan dampaknya…' : name === 'penangananSelanjutnya' ? 'Rencana tindak lanjut ke depan, jika ada…' : 'Tuliskan penanganan awal jika sudah ada…'} value={form[name]} onChange={(event) => setForm({ ...form, [name]: event.target.value })} className={`${inputClass} min-h-24`} /></> : <input id={`komplain-${name}`} name={name} type={type} placeholder={name === 'tanggal' ? undefined : name === 'rumahSakit' ? 'Contoh: RS Harapan' : name === 'dokter' ? 'Nama dokter terkait' : name === 'tindakan' ? 'Contoh: TKR Zimmer/Normmed' : 'Nama team pelapor'} autoComplete="off" required={!OPTIONAL_FIELDS.includes(name)} maxLength={name === 'tindakan' ? 500 : 200} value={form[name]} onChange={(event) => setForm({ ...form, [name]: event.target.value })} className={inputClass} />}</div>;
+  const renderFormField = ([name, label, type]) => name === 'tindakan' ? <div key={name} className="sm:col-span-2"><label htmlFor="komplain-tindakan" className="mb-2 block text-sm font-medium">{label}<span aria-hidden="true"> *</span></label><select id="komplain-tindakan" required value={customTindakan ? 'Lainnya' : form.tindakan} onChange={(event) => { const next = event.target.value; if (next === 'Lainnya') { setCustomTindakan(true); setForm({ ...form, tindakan: '' }); } else { setCustomTindakan(false); setForm({ ...form, tindakan: next }); } }} className={inputClass}><option value="" disabled>Pilih tindakan…</option>{TINDAKAN_PRESETS.map((option) => <option key={option} value={option}>{option}</option>)}<option value="Lainnya">Tindakan lainnya…</option></select>{customTindakan && <input id="komplain-tindakan-lainnya" aria-label="Tindakan lainnya" type="text" placeholder="Ketik tindakan lainnya…" autoComplete="off" required maxLength={500} value={form.tindakan} onChange={(event) => setForm({ ...form, tindakan: event.target.value })} className={`${inputClass} mt-2`} />}</div> : <div key={name} className={type === 'textarea' ? `min-w-0 sm:col-span-2 ${OPTIONAL_FIELDS.includes(name) ? 'lg:col-span-1' : ''}` : 'min-w-0'}><label id={`komplain-${name}-label`} htmlFor={`komplain-${name}`} className="mb-2 flex items-center gap-1.5 text-sm font-medium">{label}{!OPTIONAL_FIELDS.includes(name) && <span aria-hidden="true"> *</span>}<FieldInfo text={FIELD_HINTS[name]} /></label>{type === 'textarea' ? <><VisualTextEditor ref={(el) => { textareaRefs.current[name] = el; }} id={`komplain-${name}`} name={name} required={!OPTIONAL_FIELDS.includes(name)} maxLength={5000} rows={3} placeholder={name === 'komplain' ? 'Ceritakan apa yang terjadi dan dampaknya…' : name === 'penangananSelanjutnya' ? 'Rencana tindak lanjut ke depan, jika ada…' : 'Tuliskan penanganan awal jika sudah ada…'} value={form[name]} onChange={(event) => setForm({ ...form, [name]: event.target.value })} className={`${inputClass} min-h-24`} /></> : <><input id={`komplain-${name}`} name={name} type={type} list={name === 'team' ? 'team-pelapor-suggestions' : undefined} placeholder={name === 'tanggal' ? undefined : name === 'rumahSakit' ? 'Contoh: RS Harapan' : name === 'dokter' ? 'Nama dokter terkait' : name === 'tindakan' ? 'Contoh: TKR Zimmer/Normmed' : 'Nama team pelapor'} autoComplete="off" required={!OPTIONAL_FIELDS.includes(name)} maxLength={name === 'tindakan' ? 500 : 200} value={form[name]} onChange={(event) => setForm({ ...form, [name]: event.target.value })} className={inputClass} />{name === 'team' && <datalist id="team-pelapor-suggestions">{teamNameSuggestions.map((name) => <option key={name} value={name} />)}</datalist>}</>}</div>;
   const titles = { form: editItem ? 'Edit laporan komplain' : 'Buat laporan komplain', review: 'Tinjau laporan', delete: 'Arsipkan laporan?', assign: 'Tentukan penanggung jawab', selfAssign: 'Ambil laporan sebagai PIC', picAction: picEditMode ? 'Tangani komplain' : 'Detail & Tindak Lanjut', reopen: 'Buka kembali laporan', announcement: 'Buat pengumuman', announcementView: 'Pengumuman', schedule: scheduleForm?.id ? 'Ubah jadwal' : 'Jadwalkan acara' };
-  const descriptions = { form: 'Isi kolom bertanda *. Solusi awal boleh dikosongkan.', review: 'Pastikan informasi sudah benar sebelum disimpan.', delete: 'Laporan disembunyikan dari daftar aktif. Data dan riwayat tetap tersimpan.', assign: 'Pilih PIC aktif untuk menangani komplain ini.', selfAssign: 'Anda akan menjadi penanggung jawab dan dapat langsung melakukan tindak lanjut.', picAction: picEditMode ? 'Isi RTL / perkembangan, lalu catat penyelesaian ketika masalah teratasi.' : 'Laporan masuk → Ambil sebagai PIC → RTL → Penyelesaian → Selesai.', reopen: 'Jelaskan mengapa masalah masih membutuhkan penanganan.', announcement: 'Pilih penerima, jenis, dan masa tampil. Pengumuman muncul tanpa menghalangi pekerjaan.', announcementView: announcementNotice.length > 1 ? `${announcementNotice.length} pengumuman aktif.` : '', schedule: 'Jadwal tersimpan di aplikasi dan otomatis masuk ke kalender yang Anda subscribe (lihat tile Google Calendar di Beranda).' };
+  const descriptions = { form: 'Isi kolom bertanda *. Solusi awal boleh dikosongkan.', review: 'Pastikan informasi sudah benar sebelum disimpan.', delete: 'Laporan disembunyikan dari daftar aktif. Data dan riwayat tetap tersimpan.', assign: 'Pilih PIC aktif untuk menangani komplain ini.', selfAssign: 'Anda akan menjadi penanggung jawab dan dapat langsung melakukan tindak lanjut.', picAction: picEditMode ? 'Pilih status penanganan, tulis catatan, lalu Simpan Pembaruan.' : 'Laporan masuk → Ambil sebagai PIC → RTL → Penyelesaian → Selesai.', reopen: 'Jelaskan mengapa masalah masih membutuhkan penanganan.', announcement: 'Pilih penerima, jenis, dan masa tampil. Pengumuman muncul tanpa menghalangi pekerjaan.', announcementView: announcementNotice.length > 1 ? `${announcementNotice.length} pengumuman aktif.` : '', schedule: 'Jadwal tersimpan di aplikasi dan otomatis masuk ke kalender yang Anda subscribe (lihat tile Google Calendar di Beranda).' };
   // Not signed in yet (or still checking) gets a standalone centered auth page, not the full app
   // shell — there's no sidebar/tabs/notifications to show before a session exists.
   const showAuthShell = authChecking || !user;
-  const header = showAuthShell ? null : <Navbar user={user} tab={tab} setTab={setTab} loading={loading} busy={busy} loggingOut={loggingOut} onRefresh={fetchData} onLogout={logout} onExpired={endSession} newButtonRef={newButton} masterButtonRef={masterButton} unreadItems={unreadItems} formatDate={formatDate} onOpenNotification={(item) => { markRead(item.id); setTab('table'); setPendingDetailId(item.id); }} onMarkAllRead={() => markAllRead(unreadItems.map((item) => item.id))} announcementCount={announcementNotice.length} onToggleAnnouncements={() => openModal('announcementView')} onOpenTour={() => setTourOpen(true)} />;
+  const header = showAuthShell ? null : <Navbar user={user} tab={tab} setTab={setTab} loading={loading} busy={busy} loggingOut={loggingOut} onRefresh={fetchData} onLogout={logout} onExpired={endSession} newButtonRef={newButton} masterButtonRef={masterButton} unreadItems={unreadItems} formatDate={formatDate} onOpenNotification={(item) => { markRead(item.id); setTab('table'); setPendingDetailId(item.id); }} onMarkAllRead={() => markAllRead(unreadItems.map((item) => item.id))} reactionNotice={reactionNotice} onOpenReactionNotice={(item) => { dismissReactionNotice(item); setTab('table'); setPendingDetailId(item.reportId); }} onMarkAllReactionsRead={() => reactionNotice.forEach(dismissReactionNotice)} announcementCount={announcementNotice.length} onToggleAnnouncements={() => openModal('announcementView')} onOpenTour={() => setTourOpen(true)} />;
   // The sidebar only makes sense once the admin is actually inside the app — not while a session
   // is still being checked, or while a pending/rejected/forced-password-change screen is showing.
   const showAdminSidebar = !!user && user.role === 'admin' && !['pending', 'rejected'].includes(user.approval) && !user.mustChangePassword;
@@ -623,7 +649,7 @@ export default function KomplainPage() {
       {successText && <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-800/50 bg-slate-900 p-3 text-sm text-emerald-200"><p className="min-w-0 flex-1">{successText}</p>{savedReportId && <button onClick={() => { setTab('table'); setPendingDetailId(savedReportId); }} className={`${buttonClass} text-blue-300`}>Lihat laporan</button>}<button aria-label="Tutup pesan berhasil" onClick={() => setSuccessText('')} className={`${buttonClass} px-3`}><X aria-hidden="true" className="h-4 w-4" /></button></div>}
       {loadError && <div role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200"><p className="font-semibold">Laporan gagal dimuat</p><p className="mt-1 break-words">{loadError}</p>{loaded && <p className="mt-1">Menampilkan data terakhir yang berhasil dimuat.</p>}<button disabled={loading} onClick={fetchData} className={`${buttonClass} mt-3 bg-slate-800`}>Coba lagi</button></div>}
       {loading && <LoadingState compact={loaded} title={loaded ? 'Memperbarui laporan…' : 'Memuat laporan Anda…'} description={loaded ? 'Data terbaru sedang diambil.' : 'Menyiapkan daftar laporan dan rekap mingguan.'} />}
-      {tab === 'form' ? <HomePanel summary={homeSummary} summaryLoading={summaryLoading} hasMoreLatest={latestCursor != null} loadingMoreLatest={loadingMoreLatest} onLoadMoreLatest={loadMoreLatest} schedules={upcomingSchedules} schedulesLoading={schedulesLoading} onScheduleReport={onScheduleReport} onCreateSchedule={onCreateSchedule} onEditSchedule={onEditSchedule} onExpired={endSession} user={user} busy={busy} onCreate={() => openForm()} onOpen={(item) => { markRead(item.id); setTab('table'); setPendingDetailId(item.id); }} onReports={() => setTab('table')} onRecap={() => setTab('recap')} onUsers={() => setTab('users')} onAnnouncement={openAnnouncement} onAssign={(item) => openWorkflow('assign', item)} onFollowUp={(item) => openPicAction(item, true)} /> : <DataView key={tab} initialView={tab === 'recap' ? 'weekly' : 'table'} list={list} loaded={loaded} loading={loading} loadError={loadError} busy={busy} user={user} levels={LEVELS} Badge={Badge} formatDate={formatDate} today={today} onCreate={() => openForm()} onEdit={openForm} onDelete={(item) => openWorkflow('delete', item)} onAssign={(item) => openWorkflow('assign', item)} onSelfAssign={takeReport} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onExpired={endSession} onMarkRead={markRead} pendingDetailId={pendingDetailId} onPendingDetailHandled={() => setPendingDetailId(null)} onBulkPurge={bulkPurge} />}
+      {tab === 'form' ? <HomePanel summary={homeSummary} summaryLoading={summaryLoading} hasMoreLatest={latestCursor != null} loadingMoreLatest={loadingMoreLatest} onLoadMoreLatest={loadMoreLatest} schedules={upcomingSchedules} schedulesLoading={schedulesLoading} onScheduleReport={onScheduleReport} onCreateSchedule={onCreateSchedule} onEditSchedule={onEditSchedule} onExpired={endSession} user={user} busy={busy} onCreate={() => openForm()} onOpen={(item) => { markRead(item.id); setTab('table'); setPendingDetailId(item.id); }} onReports={() => setTab('table')} onRecap={() => setTab('recap')} onUsers={() => setTab('users')} onAnnouncement={openAnnouncement} onAssign={(item) => openWorkflow('assign', item)} onFollowUp={(item) => openPicAction(item, true)} /> : <DataView key={tab} initialView={tab === 'recap' ? 'weekly' : 'table'} list={list} loaded={loaded} loading={loading} loadError={loadError} busy={busy} user={user} levels={LEVELS} Badge={Badge} formatDate={formatDate} today={today} onCreate={() => openForm()} onEdit={openForm} onDelete={(item) => openWorkflow('delete', item)} onAssign={(item) => openWorkflow('assign', item)} onSelfAssign={takeReport} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onExpired={endSession} onMarkRead={markRead} pendingDetailId={pendingDetailId} onPendingDetailHandled={() => setPendingDetailId(null)} onBulkPurge={bulkPurge} onReact={react} />}
     </>;
 
   if (showAuthShell) return <main lang="id" data-role="pelapor" className="komplain-theme min-h-screen bg-slate-950 text-slate-100">{mainContent}</main>;
@@ -667,7 +693,7 @@ export default function KomplainPage() {
       <div className={formFooter}>{scheduleForm.id && <button type="button" disabled={busy} onClick={() => mutateSchedule('delete')} className={`${buttonClass} bg-red-950/60 text-red-200 hover:bg-red-900/60`}>Hapus</button>}<Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button disabled={busy} className={`${buttonClass} flex-1 bg-blue-600`}>{busy ? 'Menyimpan…' : 'Simpan'}</button></div>
     </form>}
     {modal === 'picAction' && (() => { const lastNote = picHistory.find((entry) => entry.catatan); return <div className="mt-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><StatusCaseBadge statusCase={workflowItem?.statusCase} /><Badge status={workflowItem?.status} /><WorkflowBadge status={handlingStatus(workflowItem || {})} /><AlertBadge item={workflowItem || {}} /><ImplantBadge item={workflowItem || {}} /></div><p className="break-words text-sm text-slate-300">{workflowItem?.dokter} · {workflowItem?.tindakan}</p></div>
+      {!picEditMode && <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><StatusCaseBadge statusCase={workflowItem?.statusCase} /><Badge status={workflowItem?.status} /><WorkflowBadge status={handlingStatus(workflowItem || {})} /><AlertBadge item={workflowItem || {}} /><ImplantBadge item={workflowItem || {}} /></div><p className="break-words text-sm text-slate-300">{workflowItem?.dokter} · {workflowItem?.tindakan}</p></div>}
       {picDetailError && <div role="alert" className="rounded-xl border border-amber-800 bg-amber-950/30 p-3 text-sm text-amber-200"><p>Riwayat belum berhasil dimuat: {picDetailError}</p><button type="button" disabled={picDetailLoading} onClick={() => loadPicHistory(workflowItem)} className={`${buttonClass} mt-2 bg-slate-800`}>Coba muat riwayat lagi</button></div>}
       {!picEditMode ? <>
         {handlingStatus(workflowItem || {}) !== 'Selesai' ? workflowItem?.picId && <button type="button" onClick={() => { setPicEditMode(true); loadPicHistory(workflowItem); }} className={`${buttonClass} w-full bg-blue-600`}>Tangani komplain</button> : <div role="status" className="rounded-xl border border-emerald-500 bg-emerald-950/70 p-4"><p className="flex items-center gap-2 font-semibold text-emerald-200"><CheckCircle2 aria-hidden="true" className="h-5 w-5 shrink-0" />Komplain selesai</p>{workflowItem?.selesaiPada && <p className="mt-2 text-xs text-emerald-100">Diselesaikan pada {new Date(workflowItem.selesaiPada).toLocaleString('id-ID')}</p>}<p className="mt-2 text-xs leading-5 text-slate-300">Hasil penyelesaian tersimpan. Untuk tindak lanjut baru, admin atau pelapor dapat membuka kembali laporan.</p></div>}
@@ -685,12 +711,16 @@ export default function KomplainPage() {
         <div className={formFooter}><Dialog.Close className={`${buttonClass} w-full bg-slate-800`}>Tutup</Dialog.Close></div>
       </> : <>
         <button type="button" onClick={() => { setPicEditMode(false); setPicSaved(''); }} className="flex items-center gap-1.5 text-sm text-blue-300 hover:underline">← Kembali ke detail</button>
-        <section aria-labelledby="pic-complaint-context-title" className="rounded-xl border border-red-800/70 bg-red-950/30 p-3 sm:p-4">
-          <h3 id="pic-complaint-context-title" className="flex items-center gap-2 text-sm font-semibold text-red-200"><AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />Masalah / komplain yang dilaporkan</h3>
-          <p className="mt-2 break-words text-xs leading-5 text-slate-300">{workflowItem?.dokter || 'Dokter belum diisi'} · {workflowItem?.rumahSakit || 'Rumah sakit belum diisi'}</p>
-          {workflowItem?.komplain ? <FormattedText text={workflowItem.komplain} className="mt-3 break-words text-sm leading-6 text-slate-100" /> : <p className="mt-3 text-sm text-slate-400">{picDetailLoading ? 'Memuat isi komplain…' : 'Deskripsi komplain belum tersedia.'}</p>}
-          {initialSolution(workflowItem) && <div className="mt-3 border-t border-red-800/60 pt-3"><h4 className="text-xs font-semibold text-teal-200">Solusi awal dari pelapor</h4><FormattedText text={initialSolution(workflowItem)} className="mt-1 break-words text-sm leading-6 text-slate-200" /></div>}
-        </section>
+        <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-800/30 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="min-w-0 break-words text-sm font-medium text-slate-200">{workflowItem?.dokter || 'Dokter belum diisi'} · {workflowItem?.rumahSakit || 'RS belum diisi'}</p>
+            <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-300"><span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-slate-200">{(workflowItem?.picNama || '?').trim().charAt(0).toUpperCase()}</span>{(workflowItem?.picNama || 'Belum ditugaskan').split(' ')[0]}</span>
+          </div>
+          <div className="max-h-28 overflow-y-auto rounded-lg bg-slate-950/50 p-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-red-300">Masalah</p>
+            {workflowItem?.komplain ? <FormattedText text={workflowItem.komplain} className="mt-1 text-xs leading-5 text-slate-200" /> : <p className="mt-1 text-xs text-slate-400">—</p>}
+          </div>
+        </div>
         <form onSubmit={(event) => {
           event.preventDefault();
           if (!LEVELS.some((level) => level.code === workflow.status)) {
@@ -698,27 +728,29 @@ export default function KomplainPage() {
             event.currentTarget.querySelector('[name="status"]')?.focus();
             return;
           }
-          const complete = event.nativeEvent.submitter?.value === 'complete';
-          const field = complete ? 'jalanKeluar' : 'penangananSelanjutnya';
-          if (!editorPlainText(textToEditorDoc(workflow[field])).trim()) {
-            setActionError(complete ? 'Isi penyelesaian terlebih dahulu sebelum menandai komplain selesai.' : 'Isi RTL / perkembangan terlebih dahulu.');
-            textareaRefs.current[complete ? 'picSolution' : 'picNote']?.focus();
+          if (!editorPlainText(textToEditorDoc(workflow.penangananSelanjutnya)).trim()) {
+            setActionError('Isi catatan hasil penanganan terlebih dahulu.');
+            textareaRefs.current.picNote?.focus();
             return;
           }
+          const complete = workflow.statusPenanganan === 'Selesai';
           const rtlChanged = workflow.penangananSelanjutnya !== (workflowItem?.penangananSelanjutnya || '');
           const note = !complete || rtlChanged ? workflow.penangananSelanjutnya.length <= 2000 ? workflow.penangananSelanjutnya : 'RTL diperbarui. Isi lengkap tersedia pada riwayat perubahan RTL.' : '';
-          mutate('followUp', { statusPenanganan: complete ? 'Selesai' : workflow.statusPenanganan === 'Menunggu' ? 'Menunggu' : 'Diproses', catatan: note });
-        }} className="space-y-4 border-t border-slate-800 pt-4">
-          <fieldset aria-describedby="pic-status-help" className="rounded-xl border border-blue-800/70 bg-blue-950/30 p-3"><legend className="flex items-center gap-1.5 px-1 text-sm font-semibold">Tingkat keparahan <span className="text-red-300">*</span><SeverityInfo levels={LEVELS} /></legend><div className="grid grid-cols-2 gap-2">{LEVELS.map((level) => <label key={level.code} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm font-medium transition ${level.color} ${workflow.status === level.code ? 'ring-2 ring-current' : 'hover:brightness-125'} focus-within:ring-2 focus-within:ring-blue-400`}><input type="radio" name="status" required  value={level.code} checked={workflow.status === level.code} onChange={(event) => setWorkflow({ ...workflow, status: event.target.value })} className="h-4 w-4 shrink-0 accent-current" /><span>{level.label}</span></label>)}</div><p id="pic-status-help" className="mt-3 text-xs leading-5 text-slate-300">{LEVELS.find((level) => level.code === workflow.status)?.description || 'Pilih tingkat dampak komplain. Tekan ikon info untuk melihat penjelasan semua tingkat.'}</p><p className="mt-2 text-xs leading-5 text-slate-400">Keparahan menunjukkan dampak masalah. Status Baru, Diproses, Menunggu, dan Selesai menunjukkan tahap penanganannya.</p></fieldset>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-700 p-3"><input type="checkbox" checked={workflow.statusPenanganan === 'Menunggu'} onChange={(event) => setWorkflow({ ...workflow, statusPenanganan: event.target.checked ? 'Menunggu' : 'Diproses' })} className="h-4 w-4 shrink-0" /><span className="text-sm">Sedang menunggu konfirmasi / pihak terkait<span className="mt-1 block text-xs text-slate-400">Saat Simpan RTL, status menjadi Menunggu. Jika tidak dicentang, status Diproses.</span></span></label>
-          <p className="text-sm text-slate-400">Simpan RTL untuk mencatat tindakan dan langkah berikutnya. Jika masalah sudah teratasi, isi penyelesaian lalu tekan Selesai.</p>
-          <div><label id="pic-note-label" htmlFor="pic-note" className="mb-2 flex items-center gap-1.5 text-sm font-medium">RTL / Perkembangan<FieldInfo text="RTL = Rencana Tindak Lanjut. Catatan langkah yang sudah/akan dilakukan sebelum masalah benar-benar selesai." /></label><VisualTextEditor ref={(el) => { textareaRefs.current.picNote = el; }} id="pic-note" placeholder="Contoh: Sudah menghubungi rumah sakit. Berikutnya akan konfirmasi jadwal kunjungan. (@ untuk menyebut)" maxLength={5000} value={workflow.penangananSelanjutnya} onChange={(event) => setWorkflow({ ...workflow, penangananSelanjutnya: event.target.value })} className={inputClass} mentionables={mentionables} /></div>
-          <div className="rounded-xl border border-emerald-700 bg-emerald-950/30 p-3"><label id="pic-solution-label" htmlFor="pic-solution" className="mb-2 block text-sm font-medium text-emerald-200">Penyelesaian</label><VisualTextEditor ref={(el) => { textareaRefs.current.picSolution = el; }} id="pic-solution"  placeholder="Tuliskan tindakan yang dilakukan dan hasilnya." maxLength={5000} value={workflow.jalanKeluar} onChange={(event) => setWorkflow({ ...workflow, jalanKeluar: event.target.value })} className={inputClass} mentionables={mentionables} /><p className="mt-2 text-xs text-slate-400">Masalah sudah teratasi? Isi hasil penanganan di sini, lalu tekan Selesaikan komplain.</p></div>
+          mutate('followUp', { statusPenanganan: workflow.statusPenanganan, jalanKeluar: complete ? workflow.penangananSelanjutnya : workflow.jalanKeluar, catatan: note });
+        }} className="space-y-3 border-t border-slate-800 pt-3">
+          <div>
+            <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold">Status Penanganan<FieldInfo text="Diproses: masih aktif Anda tangani sendiri. Menunggu: sudah ditangani, tapi menunggu konfirmasi dari pihak lain (RS, tim lain, dll). Selesai: masalah sudah teratasi dan laporan ditutup." /></p>
+            <div role="radiogroup" aria-label="Status Penanganan" className="flex flex-wrap gap-x-4 gap-y-2">
+              {[['Diproses', 'text-violet-300'], ['Menunggu', 'text-amber-300'], ['Selesai', 'text-emerald-300']].map(([value, color]) => <label key={value} className="flex min-h-6 cursor-pointer items-center gap-1.5 text-sm text-slate-200"><input type="radio" name="statusPenanganan" value={value} checked={workflow.statusPenanganan === value} onChange={() => setWorkflow({ ...workflow, statusPenanganan: value })} className={`h-4 w-4 accent-current ${color}`} /><span className={workflow.statusPenanganan === value ? `font-semibold ${color}` : ''}>{value}</span></label>)}
+            </div>
+          </div>
+          <fieldset><legend className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold">Tingkat Keparahan <span className="text-red-300">*</span><SeverityInfo levels={LEVELS} /></legend><div className="flex flex-wrap gap-x-4 gap-y-2">{LEVELS.map((level) => <label key={level.code} className="flex min-h-6 cursor-pointer items-center gap-1.5 text-sm text-slate-200"><input type="radio" name="status" required value={level.code} checked={workflow.status === level.code} onChange={(event) => setWorkflow({ ...workflow, status: event.target.value })} className={`h-4 w-4 accent-current ${level.color.split(' ')[0]}`} /><span className={workflow.status === level.code ? `font-semibold ${level.color.split(' ')[0]}` : ''}>{level.label}</span></label>)}</div></fieldset>
+          <div><label id="pic-note-label" htmlFor="pic-note" className="mb-2 flex items-center gap-1.5 text-sm font-medium">Catatan Hasil Penanganan <span className="text-red-300">*</span><FieldInfo text="Tuliskan progres/tindakan yang sudah dilakukan. Jika status Selesai, tuliskan solusi akhir yang menyelesaikan masalah." /></label><VisualTextEditor ref={(el) => { textareaRefs.current.picNote = el; }} id="pic-note" placeholder="Tuliskan update penanganan atau solusi di sini… (@ untuk menyebut)" maxLength={5000} value={workflow.penangananSelanjutnya} onChange={(event) => setWorkflow({ ...workflow, penangananSelanjutnya: event.target.value })} className={inputClass} mentionables={mentionables} /></div>
           {picDetailLoading && !picHistory.length && <p className="text-xs text-slate-500">Memuat riwayat sebelumnya…</p>}
           {lastNote && <details className="rounded-xl border border-slate-700 p-3"><summary className="cursor-pointer text-sm text-slate-300">Lihat catatan riwayat terakhir</summary><p className="mt-2 text-xs text-slate-400">{lastNote.nama} · {new Date(lastNote.tanggal).toLocaleString('id-ID')}</p><FormattedText text={lastNote.catatan} className="mt-1 text-sm leading-6" /></details>}
-          <div><label className="mb-2 block text-sm">Foto bukti penanganan (opsional)</label><PhotoPicker photos={picPhotos} onAdd={addPicPhoto} onRemove={removePicPhoto} totalExisting={(workflowItem?.fotoUrls?.length || 0) + picHistory.reduce((sum, entry) => sum + (entry.fotoUrls?.length || 0), 0)} /></div>
+          <div><label className="mb-2 block text-sm">Lampiran (opsional)</label><PhotoPicker photos={picPhotos} onAdd={addPicPhoto} onRemove={removePicPhoto} totalExisting={(workflowItem?.fotoUrls?.length || 0) + picHistory.reduce((sum, entry) => sum + (entry.fotoUrls?.length || 0), 0)} /></div>
           {picSaved && <p role="status" className="rounded-xl border border-emerald-600 bg-emerald-950/40 p-3 text-sm text-emerald-200">{picSaved}</p>}
-          <div className={`${formFooter} !grid grid-cols-1 min-[420px]:grid-cols-2 sm:sticky sm:bottom-0 sm:z-10 sm:py-3`}><button type="submit" name="intent" value="comment" disabled={busy} className={`${buttonClass} flex-1 bg-blue-600`}>{busy ? 'Menyimpan…' : 'Simpan RTL'}</button><button type="submit" name="intent" value="complete" disabled={busy} className={`${buttonClass} flex-[1.4] border border-emerald-400 bg-emerald-600 text-white shadow-lg shadow-emerald-950/40 hover:bg-emerald-500`}><CheckCircle2 aria-hidden="true" className="h-5 w-5 shrink-0" />{busy ? 'Menyimpan…' : 'Selesaikan komplain'}</button></div>
+          <div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button type="submit" disabled={busy} className={`${buttonClass} flex-1 bg-violet-600 hover:bg-violet-500`}>{busy ? 'Menyimpan…' : 'Simpan Pembaruan'}</button></div>
         </form>
       </>}
     </div>; })()}

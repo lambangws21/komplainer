@@ -4,8 +4,12 @@ import { newMentions } from '../mentions.mjs';
 export const REPORTS = 'komplainer_reports';
 export const BACKUPS = 'komplainer_backup_jobs';
 export const MENTIONS = 'komplainer_mentions';
+export const REACTION_NOTICES = 'komplainer_reaction_notices';
 export const mentionId = (reportId, userId) => createHash('sha256').update(`mention:${reportId}:${userId}`).digest('hex');
-export const canReadReport = (item, user) => user.role === 'admin' || user.role === 'petugas' || item.pelaporId === user.id || item.picId === user.id;
+// One doc per (report, target, reactor) triple — upserted, not appended, so a reactor flipping
+// like<->love collapses into a single evolving notice instead of spamming the target's feed, and
+// taking the reaction back removes it entirely (see the 'react' action in firestore-store.mjs).
+export const reactionNoticeId = (reportId, targetUserId, byUserId) => createHash('sha256').update(`reaction:${reportId}:${targetUserId}:${byUserId}`).digest('hex');
 export const backupId = (id, version) => createHash('sha256').update(`${id}:${version}`).digest('hex');
 export function validId(value) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) throw new ApiError('ID laporan tidak valid.');
@@ -58,7 +62,10 @@ export function mutateReport(action, body, old, user, accounts, photos, now) {
     item = { ...content(body), solusiAwal: text(body.jalanKeluar, 'Solusi awal', false, 5000), id: `ID-${body.requestId}`, status: '', statusPenanganan: 'Baru', picId: '', picNama: '', tenggat: '', pelaporId: user.id, pelaporNama: user.nama, pelaporRole: user.role, createdAt: now, updatedAt: now, selesaiPada: '', deletedAt: '', version: 1, fotoIds: [], photoRefs: photos, photoCount: photos.length };
     detail.statusPenanganan = 'Baru';
   } else {
-    if (!old || old.deletedAt || old.migrationPending || !canReadReport(old, user)) throw new ApiError('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
+    // No per-report read gate here on purpose — every active account can read every report
+    // (team-wide transparency), so only existence/deleted/migration-pending are checked. Who may
+    // *edit* is still restricted, via `mayEdit` just below.
+    if (!old || old.deletedAt || old.migrationPending) throw new ApiError('Laporan tidak ditemukan atau tidak dapat diakses.', 404);
     if (Number(body.version) !== old.version) throw new ApiError('Laporan sudah diperbarui pengguna lain. Muat ulang data lalu ulangi perubahan.', 409);
     if ((old.photoCount || 0) + photos.length > 15) throw new ApiError('Total foto pada laporan maksimal 15.');
     item = { ...old };
@@ -113,14 +120,21 @@ export function mutateReport(action, body, old, user, accounts, photos, now) {
   else if (action === 'followUp') mentions = newMentions(`${old.jalanKeluar || ''}\n${old.penangananSelanjutnya || ''}`, `${item.jalanKeluar || ''}\n${item.penangananSelanjutnya || ''}\n${note}`, accounts, user.id);
   return { item, history, mentions, mentionSnippet: note || item.penangananSelanjutnya || item.jalanKeluar || '' };
 }
-export function publicReport(item, accounts = []) {
-  const { photoRefs = [], fotoIds = [], ...result } = item;
+export function publicReport(item, accounts = [], user = null) {
+  const { photoRefs = [], fotoIds = [], reactions = {}, ...result } = item;
   delete result.photoCount; delete result.migrationSourceHash; delete result.migrationPending;
   result.pelaporRole = accounts.find((account) => account.id === item.pelaporId)?.role || item.pelaporRole || null;
   result.picRole = accounts.find((account) => account.id === item.picId)?.role || item.picRole || null;
   result.fotoUrls = [...fotoIds.map((id) => `/api/photo?report=${encodeURIComponent(item.id)}&id=${encodeURIComponent(id)}`), ...photoRefs.map((photo) => `/api/photo?report=${encodeURIComponent(item.id)}&path=${encodeURIComponent(photo.path)}`)];
+  // Per-user reaction map never leaves the server — only aggregate counts plus the requesting
+  // user's own reaction (so the like/love buttons know which one to highlight).
+  const values = Object.values(reactions);
+  result.reactions = { like: values.filter((value) => value === 'like').length, love: values.filter((value) => value === 'love').length, mine: (user && reactions[user.id]) || null };
   return result;
 }
-export function restrictedReport(item) {
-  return { ...Object.fromEntries(['id', 'tanggal', 'team', 'rumahSakit', 'status', 'statusCase', 'statusPenanganan', 'tenggat', 'updatedAt'].map((key) => [key, item[key] || ''])), restricted: true };
+// Who reacted and with what — resolved to names, for the detail view's "lihat siapa" list.
+// Deliberately left out of publicReport/the list action (which only ever needs the aggregate
+// counts) so the bulk report list doesn't carry every reactor's identity on every poll.
+export function reactionDetails(item, accounts = []) {
+  return Object.entries(item.reactions || {}).map(([userId, type]) => ({ userId, type, nama: accounts.find((account) => account.id === userId)?.nama || 'Pengguna' }));
 }
