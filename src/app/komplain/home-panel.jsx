@@ -1,22 +1,21 @@
 'use client';
-import { useState } from 'react';
-import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff, Inbox } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff } from 'lucide-react';
 import WorkflowBadge from './workflow-badge';
 import { InlineText } from './formatted-text';
 import { handlingStatus, canFollowUp } from './workflow.mjs';
 import GoogleCalendarStatus from './google-calendar-status';
 import MiniCalendar from './mini-calendar';
+import KanbanBoard, { kanbanDropAction } from './kanban-board';
 
 const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50';
 function MetaBadge({ icon: Icon, children, emphasis = false }) {
   return <span className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${emphasis ? 'border-slate-600 bg-slate-800 font-semibold text-slate-100' : 'border-slate-700 bg-slate-800/70 text-slate-300'}`}><Icon aria-hidden="true" className={`h-3 w-3 shrink-0 ${emphasis ? 'text-slate-300' : 'text-slate-400'}`} /><span className="truncate">{children}</span></span>;
 }
-export default function HomePanel({ summary, summaryLoading, hasMoreLatest, loadingMoreLatest, onLoadMoreLatest, schedules, schedulesLoading, user, busy, onCreate, onOpen, onReports, onRecap, onUsers, onAnnouncement, onAssign, onFollowUp, onTakeReport, onScheduleReport, onCreateSchedule, onEditSchedule, onExpired }) {
+export default function HomePanel({ summary, summaryLoading, hasMoreLatest, loadingMoreLatest, onLoadMoreLatest, schedules, schedulesLoading, user, busy, list, Badge, formatDate, onCreate, onOpen, onReports, onRecap, onUsers, onAnnouncement, onAssign, onFollowUp, onOpenPicAction, onReopen, onTakeReport, onScheduleReport, onCreateSchedule, onEditSchedule, onExpired }) {
   const loaded = !summaryLoading && !!summary;
   const counts = summary?.counts || {};
   const attention = summary?.attention || [];
-  const incoming = summary?.incoming || [];
-  const [incomingOpen, setIncomingOpen] = useState(true);
   const latest = summary?.latest?.items || [];
   const schedulesLoaded = !schedulesLoading && !!schedules;
   const upcoming = schedules || [];
@@ -30,6 +29,17 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
   const isAdmin = user.role === 'admin';
   const isPetugas = user.role === 'petugas';
   const isPelapor = user.role === 'pelapor';
+  // Admin/petugas get the Kanban board directly on Beranda (desktop only — see the "Desktop
+  // Kanban" request) instead of the list-based attention/latest sections pelapor still uses;
+  // small screens keep the old lists either way, since the board needs real width to be useful.
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1023px)');
+    const update = () => setMobile(query.matches);
+    update(); query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  const showKanbanHome = (isAdmin || isPetugas) && !mobile;
   const myComplaints = summary?.myComplaints || [];
   const [myComplaintsOpen, setMyComplaintsOpen] = useState(true);
   const openSection = (title, items, actionable = false) => <section className="min-w-0 space-y-3 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-5" aria-label={title}><h3 className="font-semibold">{title}</h3>{!loaded ? <p className="text-sm text-slate-400">Menunggu data laporan…</p> : !items.length ? <p className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">{actionable ? 'Tidak ada laporan yang perlu tindakan Anda saat ini.' : 'Belum ada laporan. Mulai dengan membuat laporan baru.'}</p> : <div className="divide-y divide-slate-800 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">{items.map((item) => <div key={item.id} className="p-4">
@@ -59,20 +69,6 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
         ['Selesai', counts.completed, 'Penanganan telah diselesaikan', CheckCircle2, 'text-emerald-300', false],
       ].map(([label, count, hint, Icon, color, primary]) => <div key={label} className={`min-w-0 rounded-2xl border bg-slate-900/70 p-4 sm:p-5 ${primary ? 'border-slate-700' : 'border-slate-800'}`}><div className="flex items-center justify-between gap-2"><p className="text-sm text-slate-400">{label}</p><Icon aria-hidden="true" className={`h-5 w-5 shrink-0 ${color}`} /></div><p className={`mt-3 text-2xl font-semibold tabular-nums sm:mt-4 sm:text-3xl ${color}`}>{loaded ? count : '—'}</p><p className="mt-2 hidden text-xs leading-5 text-slate-400 sm:block">{hint}</p></div>)}
     </div>
-    {isPetugas && <section data-tour="incoming" aria-label="Laporan baru masuk" className={`rounded-2xl border p-4 sm:p-5 ${loaded && incoming.length > 0 ? 'border-sky-800/60 bg-sky-950/20' : 'border-slate-800 bg-slate-900/50'}`}>
-      <button type="button" onClick={() => setIncomingOpen((value) => !value)} aria-expanded={incomingOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-        <span className="flex items-center gap-2"><Inbox aria-hidden="true" className={`h-5 w-5 shrink-0 ${loaded && incoming.length > 0 ? 'text-sky-300' : 'text-slate-400'}`} /><h3 className="font-semibold">Laporan Baru Masuk{loaded ? ` (${counts.incoming || 0})` : ''}</h3></span>
-        <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${incomingOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {incomingOpen && (!loaded ? <p className="mt-2 text-sm text-slate-400">Menunggu data laporan…</p> : !incoming.length ? <p className="mt-2 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Tidak ada laporan baru yang belum diambil.</p> : <>
-        <ol className="mt-3 divide-y divide-sky-900/40 overflow-hidden rounded-xl border border-sky-900/40">{incoming.map((item) => <li key={item.id} className="bg-slate-950/30 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 truncate text-sm font-medium">{item.dokter || 'Dokter belum diisi'} · {item.rumahSakit || 'RS belum diisi'}</p>{item.statusCase && <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${item.statusCase === 'Ada Kendala' ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>{item.statusCase}</span>}</div>
-          <p className="mt-1 line-clamp-2 break-words text-xs text-slate-400"><InlineText text={item.komplain || 'Deskripsi belum diisi'} /></p>
-          <button disabled={busy} onClick={() => onTakeReport(item)} className={`${button} mt-2 w-full bg-sky-700 text-white hover:bg-sky-600`}><UserRound aria-hidden="true" className="h-4 w-4" />Ambil sebagai PIC</button>
-        </li>)}</ol>
-        {counts.incoming > incoming.length && <p className="mt-2 text-xs text-slate-400">Menampilkan {incoming.length} dari {counts.incoming} laporan baru. Lihat daftar laporan untuk lainnya.</p>}
-      </>)}
-    </section>}
     {isAdmin && <section data-tour="sla" aria-label="Laporan terlambat" className={`rounded-2xl border p-4 sm:p-5 ${loaded && stale.length > 0 ? 'border-amber-800/60 bg-amber-950/20' : 'border-slate-800 bg-slate-900/50'}`}>
       <button type="button" onClick={() => setStaleOpen((value) => !value)} aria-expanded={staleOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         <span className="flex items-center gap-2"><AlarmClockOff aria-hidden="true" className={`h-5 w-5 shrink-0 ${loaded && stale.length > 0 ? 'text-amber-300' : 'text-slate-400'}`} /><h3 className="font-semibold">Laporan Terlambat{loaded ? ` (${stale.length})` : ''}</h3></span>
@@ -83,7 +79,7 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
         {stale.length > 3 && <button type="button" onClick={() => setStaleShowAll((value) => !value)} className="mt-2 text-xs font-semibold text-amber-300 hover:underline">{staleShowAll ? '− Tampilkan lebih sedikit' : `+ Lihat ${stale.length - 3} laporan terlambat lainnya`}</button>}
       </>)}
     </section>}
-    {(isPetugas || isPelapor) && <section aria-label={isPetugas ? 'Komplain yang Anda tangani' : 'Komplain yang Anda laporkan'} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5">
+    {(isPelapor || (isPetugas && mobile)) && <section aria-label={isPetugas ? 'Komplain yang Anda tangani' : 'Komplain yang Anda laporkan'} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5">
       <button type="button" onClick={() => setMyComplaintsOpen((value) => !value)} aria-expanded={myComplaintsOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         <span className="flex items-center gap-2">{isPetugas ? <UserRound aria-hidden="true" className="h-5 w-5 shrink-0 text-violet-300" /> : <ClipboardList aria-hidden="true" className="h-5 w-5 shrink-0 text-blue-300" />}<h3 className="font-semibold">{isPetugas ? 'Komplain yang Anda Tangani' : 'Komplain yang Anda Laporkan'}{loaded ? ` (${counts.myComplaints || 0})` : ''}</h3></span>
         <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${myComplaintsOpen ? 'rotate-180' : ''}`} />
@@ -94,13 +90,15 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
       </>)}
     </section>}
     <div className="flex flex-col items-start gap-6 lg:flex-row">
-      <div className={`grid min-w-0 flex-1 items-start gap-6 ${mainGridColsClass}`}>
+      {showKanbanHome ? <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
+        <KanbanBoard items={list || []} mobile={false} onOpen={onOpen} Badge={Badge} formatDate={formatDate} onDropAction={(item, targetStatus) => kanbanDropAction(item, user, { onAssign, onSelfAssign: onTakeReport, onOpenPicAction, onReopen }, targetStatus)} />
+      </div> : <div className={`grid min-w-0 flex-1 items-start gap-6 ${mainGridColsClass}`}>
         {showAttention && <div className="min-w-0 space-y-3">{openSection('Perlu tindakan Anda', attention, true)}{loaded && counts.attention > attention.length && <p className="text-xs text-slate-400">Menampilkan {attention.length} dari {counts.attention} laporan. Lihat daftar laporan untuk lainnya.</p>}</div>}
         <div className="min-w-0 space-y-3">
           {openSection(user.role === 'admin' ? 'Laporan terbaru' : 'Laporan saya terbaru', latest)}
           {hasMoreLatest && <button disabled={loadingMoreLatest} onClick={onLoadMoreLatest} className={`${button} w-full bg-slate-800/70 text-slate-300`}>{loadingMoreLatest ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <ChevronDown aria-hidden="true" className="h-4 w-4" />}{loadingMoreLatest ? 'Memuat…' : 'Muat lebih banyak'}</button>}
         </div>
-      </div>
+      </div>}
       {isAdmin && <div className="w-full min-w-0 space-y-6 lg:sticky lg:top-20 lg:w-80 lg:shrink-0">
         <section id="jadwal-agenda" className="space-y-3 scroll-mt-24 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-5" aria-label="Jadwal & Agenda">
           <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Jadwal & Agenda</h3><div className="flex flex-wrap gap-2"><GoogleCalendarStatus isAdmin={isAdmin} onExpired={onExpired} /><button disabled={busy} onClick={onCreateSchedule} className={`${button} bg-slate-800 text-blue-300`}><CalendarPlus aria-hidden="true" className="h-4 w-4" />Buat Acara</button></div></div>

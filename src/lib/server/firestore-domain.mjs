@@ -112,12 +112,15 @@ export function mutateReport(action, body, old, user, accounts, photos, now) {
     detail.after = snapshot(item);
   }
   if (photos.length > 5 || photos.length && !['create', 'update', 'followUp'].includes(action)) throw new ApiError('Foto hanya dapat ditambahkan pada laporan atau tindak lanjut.');
-  const history = { id: backupId(item.id, item.version), reportId: item.id, tanggal: now, userId: user.id, nama: user.nama, aksi: { create: 'Laporan dibuat', update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'PIC / tenggat diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], catatan: note, detail: JSON.stringify(detail) };
-  // @mention notifications only cover catatan/RTL text, and only newly-added mentions —
-  // re-saving text that already mentioned someone should not keep re-notifying them.
+  const history = { id: backupId(item.id, item.version), reportId: item.id, tanggal: now, userId: user.id, nama: user.nama, aksi: { create: 'Laporan dibuat', update: 'Laporan diedit', delete: 'Laporan diarsipkan', assign: 'Penanggung jawab diperbarui', followUp: 'Tindak lanjut', reopen: 'Laporan dibuka kembali' }[action], catatan: note, detail: JSON.stringify(detail) };
+  // @mention notifications only cover catatan/RTL/description text, and only newly-added
+  // mentions — re-saving text that already mentioned someone should not keep re-notifying them.
+  const mentionableText = (source) => `${source.komplain || ''}\n${source.jalanKeluar || ''}\n${source.penangananSelanjutnya || ''}`;
   let mentions = [];
   if (action === 'assign' || action === 'reopen') mentions = newMentions('', note, accounts, user.id);
   else if (action === 'followUp') mentions = newMentions(`${old.jalanKeluar || ''}\n${old.penangananSelanjutnya || ''}`, `${item.jalanKeluar || ''}\n${item.penangananSelanjutnya || ''}\n${note}`, accounts, user.id);
+  else if (action === 'create') mentions = newMentions('', mentionableText(item), accounts, user.id);
+  else if (action === 'update') mentions = newMentions(mentionableText(old), mentionableText(item), accounts, user.id);
   return { item, history, mentions, mentionSnippet: note || item.penangananSelanjutnya || item.jalanKeluar || '' };
 }
 export function publicReport(item, accounts = [], user = null) {
