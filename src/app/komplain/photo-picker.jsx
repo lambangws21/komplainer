@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useState } from 'react';
-import { ImagePlus, Loader2, X } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, X } from 'lucide-react';
 import { compressImage, MAX_PHOTOS, MAX_PHOTOS_TOTAL } from './image-utils.mjs';
 import { displaySrc } from './photo-url.mjs';
 
@@ -8,7 +8,11 @@ import { displaySrc } from './photo-url.mjs';
 // which can be larger than existingUrls.length — follow-up photos aren't shown as thumbnails
 // here (they live under their own history entry) but still count against the report-wide cap.
 export default function PhotoPicker({ photos, onAdd, onRemove, existingUrls = [], totalExisting = existingUrls.length, disabled = false }) {
-  const inputRef = useRef(null);
+  // Two separate inputs rather than one — a single <input capture> leaves the camera-vs-gallery
+  // choice up to the browser/OS, and several (notably iOS Safari) skip straight to the camera
+  // with no way back to the gallery. Splitting them guarantees both are always reachable.
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const perSubmitSlots = MAX_PHOTOS - photos.length;
@@ -36,9 +40,11 @@ export default function PhotoPicker({ photos, onAdd, onRemove, existingUrls = []
     <div className="flex flex-wrap gap-2">
       {existingUrls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800"><img src={displaySrc(url)} alt="Foto laporan" className="h-full w-full object-cover" /></a>)}
       {photos.map((photo) => <div key={photo.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800"><img src={photo.previewUrl} alt={photo.filename} className="h-full w-full object-cover" />{!disabled && <button type="button" onClick={() => onRemove(photo.id)} aria-label={`Hapus ${photo.filename}`} className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950/80 text-slate-100"><X aria-hidden="true" className="h-3 w-3" /></button>}</div>)}
-      {!disabled && remainingSlots > 0 && <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-700 text-slate-400 transition hover:border-blue-400 hover:text-blue-300 disabled:opacity-50">{busy ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" /> : <ImagePlus aria-hidden="true" className="h-5 w-5" />}<span className="text-[11px]">Tambah foto</span></button>}
+      {!disabled && remainingSlots > 0 && <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={busy} className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-700 text-slate-400 transition hover:border-blue-400 hover:text-blue-300 disabled:opacity-50">{busy ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" /> : <Camera aria-hidden="true" className="h-5 w-5" />}<span className="text-[11px]">Ambil foto</span></button>}
+      {!disabled && remainingSlots > 0 && <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={busy} className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-700 text-slate-400 transition hover:border-blue-400 hover:text-blue-300 disabled:opacity-50">{busy ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" /> : <ImagePlus aria-hidden="true" className="h-5 w-5" />}<span className="text-[11px]">Dari galeri</span></button>}
     </div>
-    <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple onChange={handleFiles} className="hidden" />
+    <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFiles} className="hidden" />
+    <input ref={galleryInputRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
     <p className="text-xs text-slate-500">Ambil foto langsung atau pilih dari galeri. Maksimal {MAX_PHOTOS} foto sekaligus, otomatis dikompres sebelum dikirim.{totalExisting > 0 && ` Laporan ini sudah punya ${totalExisting} dari ${MAX_PHOTOS_TOTAL} foto maksimal.`}</p>
   </div>;
