@@ -267,7 +267,12 @@ export default function KomplainPage() {
           for (const item of result.data) {
             const prevItem = prevMap.get(item.id);
             if (item.pelaporId === activeUser.id && item.picId && !prevItem?.picId) newlyAssigned.push(item);
-            if (!prevItem && item.pelaporId !== activeUser.id && ['admin', 'petugas'].includes(activeUser.role)) newlyArrived.push(item);
+            // A brand-new report that's already "Ada Kendala" with no PIC also qualifies for the
+            // critical-notice queue below — skip it here so it doesn't pop up in both "Laporan baru
+            // masuk" and "Kasus ada kendala belum ada PIC" (dismissing one used to immediately
+            // surface the other for the exact same report, reading as stacked modals).
+            const alreadyCritical = item.statusCase === 'Ada Kendala' && !item.picId && handlingStatus(item) !== 'Selesai';
+            if (!prevItem && item.pelaporId !== activeUser.id && ['admin', 'petugas'].includes(activeUser.role) && !alreadyCritical) newlyArrived.push(item);
           }
           if (newlyAssigned.length) setAssignedNotice((queue) => [...queue, ...newlyAssigned]);
           if (newlyArrived.length) setIncomingNotice((queue) => [...queue, ...newlyArrived]);
