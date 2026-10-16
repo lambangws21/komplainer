@@ -7,6 +7,11 @@ export const STATUS_CASE = [
 ];
 export const handlingStatus = (item) => item.statusPenanganan || 'Baru';
 export const canEditReport = (item, user) => !!user && (user.role === 'admin' || (item.pelaporId === user.id && handlingStatus(item) === 'Baru'));
+// Past "Baru" a pelapor can no longer change the report's content (a PIC may already be
+// responding to it), but they can still attach more photos to their own report — admin always
+// has full edit access. Separate from canEditReport so "can open the edit form" (which covers
+// both cases) doesn't get confused with "can also archive it" (which stays Baru-only).
+export const canAddPhoto = (item, user) => !!user && (user.role === 'admin' || (item.pelaporId === user.id && handlingStatus(item) !== 'Selesai'));
 export const canFollowUp = (item, user) => handlingStatus(item) !== 'Selesai' && (user?.role === 'admin' || (!!user && item.picId === user.id));
 export const canReopen = (item, user) => !!user && handlingStatus(item) === 'Selesai' && (user.role === 'admin' || item.pelaporId === user.id);
 export const isOverdue = (item, today) => !!item.tenggat && item.tenggat < today && handlingStatus(item) !== 'Selesai';

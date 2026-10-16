@@ -34,6 +34,24 @@ test('permissions, version conflict, delegated reporter PIC and complete/reopen/
  assert.equal(item.selesaiPada,'');
  item=mutateReport('delete',{version:4},item,admin,accounts,[],now).item; assert.ok(item.deletedAt);
 });
+test('pelapor keeps the ability to attach photos once the PIC has started, but content edits are silently dropped — until Selesai blocks even that',()=>{
+ let item=mutateReport('create',body(),null,reporter,accounts,[],now).item;
+ item=mutateReport('assign',{version:1,picId:pic.id},item,admin,accounts,[],now).item;
+ item=mutateReport('followUp',{version:2,statusPenanganan:'Diproses',status:'C3 - Moderate'},item,pic,accounts,[],now).item;
+ assert.equal(item.statusPenanganan,'Diproses');
+ // Mirrors what the report form actually sends on 'update' — it has no severity field at all,
+ // so spreading the full item (which now carries the PIC's C3 severity) would trip the separate
+ // "only admin may change severity via update" guard unrelated to what this test is checking.
+ const formShapedBody={id:item.id,version:item.version,tanggal:item.tanggal,dokter:'dr. Changed',rumahSakit:item.rumahSakit,team:item.team,tindakan:item.tindakan,komplain:item.komplain,statusCase:item.statusCase,jalanKeluar:item.jalanKeluar,penangananSelanjutnya:item.penangananSelanjutnya};
+ const photoOnly=mutateReport('update',formShapedBody,item,reporter,accounts,[{path:'x'}],now);
+ assert.equal(photoOnly.item.dokter,item.dokter);
+ assert.equal(photoOnly.item.photoRefs.length,1);
+ item=photoOnly.item;
+ item=mutateReport('update',{...item,dokter:'dr. Admin Edit'},item,admin,accounts,[],now).item;
+ assert.equal(item.dokter,'dr. Admin Edit');
+ item=mutateReport('followUp',{version:item.version,statusPenanganan:'Selesai',jalanKeluar:'Solusi',status:'C2 - Major'},item,pic,accounts,[],now).item;
+ assert.throws(()=>mutateReport('update',{...item},item,reporter,accounts,[{path:'y'}],now),e=>e.code===403);
+});
 test('publicReport strips internal storage fields and exposes only authenticated photo paths',()=>{
  const item=mutateReport('create',body(),null,reporter,accounts,[{path:'komplainer/reports/x/photo'}],now).item;
  const projected=publicReport(item,accounts); assert.equal(projected.photoRefs,undefined); assert.equal(projected.photoCount,undefined); assert.match(projected.fotoUrls[0],/^\/api\/photo\?report=/);

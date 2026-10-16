@@ -37,7 +37,7 @@ import SeverityInfo from './severity-info';
 import { initialSolution, handlingSolution, handlingDraft, mergeEditable } from './report-process.mjs';
 import { ANNOUNCEMENT_AUDIENCES, announcementAudience } from '@/lib/announcement-policy.mjs';
 import { apiRequest, postJson } from './api-client.mjs';
-import { ROLE_LABELS, STATUS_CASE, handlingStatus, historyChanges, formatHistoryChange, editedFieldLabels } from './workflow.mjs';
+import { ROLE_LABELS, STATUS_CASE, handlingStatus, canEditReport, historyChanges, formatHistoryChange, editedFieldLabels } from './workflow.mjs';
 import { loadReadIds, saveReadIds } from './read-tracking.mjs';
 import { playNotificationChime } from './notification-sound.mjs';
 
@@ -659,7 +659,7 @@ export default function KomplainPage() {
     {busy && <div className="mt-5"><LoadingState title={modal === 'delete' ? (confirmPurge ? 'Menghapus permanen…' : 'Mengarsipkan laporan…') : 'Menyimpan perubahan…'} description="Tunggu hingga konfirmasi muncul. Jangan tutup halaman." /></div>}
     <div aria-busy={busy} hidden={busy} className={`${dialogBody} ${modal === 'form' && !busy ? 'lg:flex lg:flex-col lg:overflow-hidden lg:px-0 lg:pb-0' : ''}`} data-dialog-scroll>
     {actionError && <p role="alert" className="mt-4 break-words rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">{actionError}</p>}{mutationConflict && <button type="button" disabled={busy} onClick={reloadConflict} className={`${buttonClass} mt-3 bg-blue-600`}>Muat data terbaru — pertahankan isian</button>}{fieldConflicts.length > 0 && <section className="mt-3 rounded-xl border border-amber-700 p-3"><h3 className="text-sm font-semibold text-amber-200">Perubahan yang perlu diperiksa</h3><p className="mt-1 text-xs text-slate-300">Kolom berikut diubah oleh Anda dan pengguna lain. Isian Anda tetap berada di form.</p>{fieldConflicts.map((entry) => <div key={entry.key} className="mt-3"><p className="text-xs font-semibold">{fields.find(([key]) => key === entry.key)?.[1] || entry.key}</p><p className="mt-1 text-xs text-slate-400">Versi terbaru:</p><FormattedText text={String(entry.latest || 'Belum diisi')} className="break-words text-sm leading-6" /></div>)}</section>}
-    {(modal === 'form' || modal === 'review') && <ReportForm step={modal} form={form} setForm={setForm} editItem={editItem} user={user} formatDate={formatDate} busy={busy}
+    {(modal === 'form' || modal === 'review') && <ReportForm step={modal} form={form} setForm={setForm} editItem={editItem} contentLocked={!!editItem && !canEditReport(editItem, user)} user={user} formatDate={formatDate} busy={busy}
       formPhotos={formPhotos} addFormPhoto={addFormPhoto} removeFormPhoto={removeFormPhoto}
       customTindakan={customTindakan} setCustomTindakan={setCustomTindakan} showFormExtras={showFormExtras} setShowFormExtras={setShowFormExtras} showExample={showExample} setShowExample={setShowExample}
       draftRestored={draftRestored} onDiscardDraft={() => { clearDraft(draftStorage(), user.id); draftRequestId.current = crypto.randomUUID(); setForm({ ...newForm(), team: user.unit }); setFormPhotos([]); setCustomTindakan(false); setShowFormExtras(false); setDraftRestored(false); }}

@@ -72,10 +72,15 @@ export function mutateReport(action, body, old, user, accounts, photos, now) {
     detail.before = snapshot(old);
     const mayEdit = user.role === 'admin' || old.pelaporId === user.id && old.statusPenanganan === 'Baru';
     if (action === 'update') {
-      if (!mayEdit) throw new ApiError('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
+      // Past "Baru" a pelapor can no longer change the content a PIC may already be responding
+      // to, but they can still attach more photos to their own report right up until it's
+      // Selesai — admin keeps full edit access throughout.
+      const mayAddPhoto = user.role === 'admin' || (old.pelaporId === user.id && old.statusPenanganan !== 'Selesai');
+      if (!mayEdit && !mayAddPhoto) throw new ApiError('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
       const edited = content({ ...old, ...body, jalanKeluar: body.jalanKeluar ?? old.solusiAwal ?? (old.statusPenanganan === 'Baru' ? old.jalanKeluar || '' : '') });
       edited.solusiAwal = edited.jalanKeluar;
       if (old.statusPenanganan !== 'Baru') edited.jalanKeluar = old.jalanKeluar || '';
+      if (!mayEdit) { for (const key of contents) edited[key] = old[key]; edited.solusiAwal = old.solusiAwal; edited.statusCase = old.statusCase; }
       Object.assign(item, edited);
       item.photoRefs = [...(old.photoRefs || []), ...photos];
       detail.fields = contents.filter((key) => old[key] !== item[key]);

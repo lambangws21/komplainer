@@ -23,7 +23,7 @@ import RoleBadge from './role-badge';
 import ImplantBadge from './implant-badge';
 import { IMPLANTS, detectImplants } from './implant.mjs';
 import { initialSolution, handlingSolution } from './report-process.mjs';
-import { WORKFLOW_STATUSES, STATUS_CASE, canEditReport, canFollowUp, canReopen, handlingStatus, workflowCardStyle, daysSince, historyChanges, formatHistoryValue, historyFieldLabel, editedFieldLabels } from './workflow.mjs';
+import { WORKFLOW_STATUSES, STATUS_CASE, canEditReport, canAddPhoto, canFollowUp, canReopen, handlingStatus, workflowCardStyle, daysSince, historyChanges, formatHistoryValue, historyFieldLabel, editedFieldLabels } from './workflow.mjs';
 import { apiRequest } from './api-client.mjs';
 import KanbanBoard, { Avatar, kanbanDropAction } from './kanban-board';
 
@@ -232,13 +232,13 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
   }
   const alertAction = (item) => () => {
     if (canFollowUp(item, user)) onOpenPicAction(item);
-    else if (canEditReport(item, user)) onEdit(item);
+    else if (canEditReport(item, user) || canAddPhoto(item, user)) onEdit(item);
     else openDetail(item);
   };
   const primaryKanbanAction = (item, targetStatus) => kanbanDropAction(item, user, { onAssign, onSelfAssign, onOpenPicAction, onReopen }, targetStatus);
   const actions = (item, mobile = false) => <div className={mobile ? 'grid w-full grid-cols-2 gap-2' : 'flex flex-wrap items-center gap-1'}>
     {canFollowUp(item, user) ? <button disabled={busy} aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={mobile ? `${control} px-3 text-emerald-300 hover:bg-emerald-500/10` : `${iconControl} text-emerald-300 hover:bg-emerald-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail & Riwayat</span>}</button> : <button aria-label={`Detail laporan ${item.dokter || ''}`} onClick={() => openDetail(item)} className={mobile ? `${control} px-3 text-blue-300 hover:bg-blue-500/10` : `${iconControl} text-blue-300 hover:bg-blue-500/10`}><Eye aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Detail</span>}</button>}
-    {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Edit laporan ${item.dokter || ''}`} onClick={() => onEdit(item)} className={mobile ? `${control} px-3 text-slate-300 hover:bg-slate-800` : `${iconControl} text-slate-300 hover:bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Edit</span>}</button>}
+    {(canEditReport(item, user) || canAddPhoto(item, user)) && <button disabled={busy || item.id == null} aria-label={`Edit laporan ${item.dokter || ''}`} onClick={() => onEdit(item)} className={mobile ? `${control} px-3 text-slate-300 hover:bg-slate-800` : `${iconControl} text-slate-300 hover:bg-slate-800`}><Pencil aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Edit</span>}</button>}
     {user.role === 'admin' && handlingStatus(item) !== 'Selesai' && <button disabled={busy} aria-label={`Tentukan PIC ${item.dokter || ''}`} onClick={() => onAssign(item)} className={mobile ? `${control} px-3 text-violet-300 hover:bg-violet-500/10` : `${iconControl} text-violet-300 hover:bg-violet-500/10`}><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Tentukan PIC</span>}</button>}
     {user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' && <button disabled={busy} aria-label={`Ambil laporan ${item.dokter || ''} sebagai PIC`} onClick={() => onSelfAssign(item)} className={mobile ? `${control} px-3 text-violet-300 hover:bg-violet-500/10` : `${iconControl} text-violet-300 hover:bg-violet-500/10`}><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Ambil sebagai PIC</span>}</button>}
     {canReopen(item, user) && <button disabled={busy} aria-label={`Buka kembali ${item.dokter || ''}`} onClick={() => onReopen(item)} className={mobile ? `${control} px-3 text-amber-300 hover:bg-amber-500/10` : `${iconControl} text-amber-300 hover:bg-amber-500/10`}><RotateCcw aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Buka kembali</span>}</button>}
@@ -253,7 +253,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
       : [handlingStatus(item) === 'Selesai' ? 'Lihat penyelesaian' : 'Lihat detail', Eye, () => openDetail(item), 'bg-blue-600 hover:bg-blue-500'];
     const options = [
       ['Detail & riwayat', Eye, () => openDetail(item)],
-      canEditReport(item, user) && ['Edit laporan', Pencil, () => onEdit(item)],
+      (canEditReport(item, user) || canAddPhoto(item, user)) && ['Edit laporan', Pencil, () => onEdit(item)],
       user.role === 'admin' && handlingStatus(item) !== 'Selesai' && ['Tentukan PIC', UserRound, () => onAssign(item)],
       user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' && ['Ambil sebagai PIC', UserRound, () => onSelfAssign(item)],
       canReopen(item, user) && ['Buka kembali', RotateCcw, () => onReopen(item)],
@@ -469,7 +469,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
         })}</ol>
       </section>
       </div>
-      <div className="flex shrink-0 gap-2 border-t border-slate-800 bg-slate-900 px-4 pt-2 lg:justify-end pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">{canEditReport(detail, user) && <button disabled={busy || detailLoading || !!detailError} aria-label="Edit laporan ini" onClick={() => { const target = detail; detailVersion.current += 1; setDetail(null); onEdit(target); }} className={`${control} mr-auto hidden bg-slate-800 px-3 text-slate-300 hover:bg-slate-700 lg:inline-flex`}><Pencil aria-hidden="true" className="h-4 w-4" /></button>}<Dialog.Close className={`${control} min-w-0 flex-1 bg-slate-800 px-2 hover:bg-slate-700 lg:flex-none lg:min-w-40`}><X aria-hidden="true" className="h-4 w-4 shrink-0" />Tutup</Dialog.Close>{canFollowUp(detail, user) && <button disabled={busy || detailLoading || !!detailError} onClick={() => { detailVersion.current += 1; setDetail(null); if (!detail.picId && user.role === 'admin') onAssign(detail); else onOpenPicAction(detail, true); }} className={`${control} min-w-0 flex-1 bg-blue-600 px-2 text-white hover:bg-blue-500 lg:flex-none lg:min-w-40`}>{detail.picId ? <MessageCircle aria-hidden="true" className="h-4 w-4 shrink-0" /> : <UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />}{detail.picId ? 'Tindak lanjuti' : 'Tentukan PIC'}</button>}</div>
+      <div className="flex shrink-0 gap-2 border-t border-slate-800 bg-slate-900 px-4 pt-2 lg:justify-end pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">{(canEditReport(detail, user) || canAddPhoto(detail, user)) && <button disabled={busy || detailLoading || !!detailError} aria-label="Edit laporan ini" onClick={() => { const target = detail; detailVersion.current += 1; setDetail(null); onEdit(target); }} className={`${control} mr-auto hidden bg-slate-800 px-3 text-slate-300 hover:bg-slate-700 lg:inline-flex`}><Pencil aria-hidden="true" className="h-4 w-4" /></button>}<Dialog.Close className={`${control} min-w-0 flex-1 bg-slate-800 px-2 hover:bg-slate-700 lg:flex-none lg:min-w-40`}><X aria-hidden="true" className="h-4 w-4 shrink-0" />Tutup</Dialog.Close>{canFollowUp(detail, user) && <button disabled={busy || detailLoading || !!detailError} onClick={() => { detailVersion.current += 1; setDetail(null); if (!detail.picId && user.role === 'admin') onAssign(detail); else onOpenPicAction(detail, true); }} className={`${control} min-w-0 flex-1 bg-blue-600 px-2 text-white hover:bg-blue-500 lg:flex-none lg:min-w-40`}>{detail.picId ? <MessageCircle aria-hidden="true" className="h-4 w-4 shrink-0" /> : <UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />}{detail.picId ? 'Tindak lanjuti' : 'Tentukan PIC'}</button>}</div>
       </>}</Dialog.Content></Dialog.Portal></Dialog.Root>
     {canBulkPurge && <Dialog.Root open={bulkOpen} onOpenChange={(open) => { if (!open && !bulkBusy) { setBulkOpen(false); setBulkConfirm(false); setBulkResults(null); setBulkError(''); } }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user.role} className={`${mobileDialog} max-w-lg`}>
       <div className="relative shrink-0 border-b border-slate-800 px-4 py-3 sm:px-6 sm:py-4">
