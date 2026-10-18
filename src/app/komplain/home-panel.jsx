@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff } from 'lucide-react';
+import { PlusCircle, ChevronRight, ChevronDown, ClipboardList, Clock3, CheckCircle2, AlertCircle, Megaphone, Stethoscope, Building2, UserRound, LoaderCircle, CalendarPlus, CalendarDays, CalendarClock, MapPin, Camera, AlarmClockOff, Inbox } from 'lucide-react';
 import WorkflowBadge from './workflow-badge';
 import { InlineText } from './formatted-text';
 import { handlingStatus, canFollowUp } from './workflow.mjs';
@@ -42,6 +42,13 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
   const showKanbanHome = (isAdmin || isPetugas) && !mobile;
   const myComplaints = summary?.myComplaints || [];
   const [myComplaintsOpen, setMyComplaintsOpen] = useState(true);
+  // Petugas's "attention"/"latest" above only cover reports already tied to them (as PIC or
+  // reporter) — a brand-new unassigned report is otherwise invisible on their Beranda once the
+  // Kanban (which shows everything, "Baru" column included) isn't rendered, i.e. on mobile. This
+  // surfaces that same incoming queue the Kanban's "Baru" column would show, using the `incoming`
+  // field home-summary.mjs already computes for exactly this purpose.
+  const incoming = summary?.incoming || [];
+  const showIncoming = isPetugas && !showKanbanHome;
   const openSection = (title, items, actionable = false) => <section className="min-w-0 space-y-3 lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/50 lg:p-5" aria-label={title}><h3 className="font-semibold">{title}</h3>{!loaded ? <p className="text-sm text-slate-400">Menunggu data laporan…</p> : !items.length ? <p className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">{actionable ? 'Tidak ada laporan yang perlu tindakan Anda saat ini.' : 'Belum ada laporan. Mulai dengan membuat laporan baru.'}</p> : <div className="divide-y divide-slate-800 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">{items.map((item) => <div key={item.id} className="p-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"><MetaBadge icon={Stethoscope} emphasis>{item.dokter || 'Dokter belum diisi'}</MetaBadge><MetaBadge icon={Building2}>{item.rumahSakit || 'RS belum diisi'}</MetaBadge>{!actionable && <MetaBadge icon={UserRound}>{item.picNama ? `PIC: ${item.picNama}` : 'Belum ditugaskan'}</MetaBadge>}</div><WorkflowBadge status={handlingStatus(item)} /></div>
     <p className="mt-2 line-clamp-2 break-words text-sm text-slate-300"><InlineText text={item.komplain || 'Deskripsi belum diisi'} /></p>
@@ -79,6 +86,13 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
         {stale.length > 3 && <button type="button" onClick={() => setStaleShowAll((value) => !value)} className="mt-2 text-xs font-semibold text-amber-300 hover:underline">{staleShowAll ? '− Tampilkan lebih sedikit' : `+ Lihat ${stale.length - 3} laporan terlambat lainnya`}</button>}
       </>)}
     </section>}
+    {showIncoming && <section aria-label="Laporan baru masuk" className={`rounded-2xl border p-4 sm:p-5 ${loaded && incoming.length > 0 ? 'border-blue-900/50 bg-blue-950/10' : 'border-slate-800 bg-slate-900/50'}`}>
+      <h3 className="flex items-center gap-2 font-semibold"><Inbox aria-hidden="true" className={`h-5 w-5 shrink-0 ${loaded && incoming.length > 0 ? 'text-blue-300' : 'text-slate-400'}`} />Laporan Baru Masuk{loaded ? ` (${counts.incoming || 0})` : ''}</h3>
+      {!loaded ? <p className="mt-2 text-sm text-slate-400">Menunggu data laporan…</p> : !incoming.length ? <p className="mt-2 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Tidak ada laporan baru yang belum ditugaskan.</p> : <>
+        <ol className="mt-3 divide-y divide-blue-900/40 overflow-hidden rounded-xl border border-blue-900/40">{incoming.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 bg-slate-950/30 p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.dokter || 'Dokter belum diisi'} · {item.rumahSakit || 'RS belum diisi'}</p><p className="mt-0.5 line-clamp-1 break-words text-xs text-slate-400"><InlineText text={item.komplain || 'Deskripsi belum diisi'} /></p></div><button disabled={busy} onClick={() => onTakeReport(item)} className={`${button} shrink-0 bg-blue-600 text-white hover:bg-blue-500`}><UserRound aria-hidden="true" className="h-4 w-4" />Ambil sebagai PIC</button></li>)}</ol>
+        {counts.incoming > incoming.length && <p className="mt-2 text-xs text-slate-400">Menampilkan {incoming.length} dari {counts.incoming} laporan baru. Lihat daftar laporan untuk lainnya.</p>}
+      </>}
+    </section>}
     {(isPelapor || (isPetugas && mobile)) && <section aria-label={isPetugas ? 'Komplain yang Anda tangani' : 'Komplain yang Anda laporkan'} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5">
       <button type="button" onClick={() => setMyComplaintsOpen((value) => !value)} aria-expanded={myComplaintsOpen} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         <span className="flex items-center gap-2">{isPetugas ? <UserRound aria-hidden="true" className="h-5 w-5 shrink-0 text-violet-300" /> : <ClipboardList aria-hidden="true" className="h-5 w-5 shrink-0 text-blue-300" />}<h3 className="font-semibold">{isPetugas ? 'Komplain yang Anda Tangani' : 'Komplain yang Anda Laporkan'}{loaded ? ` (${counts.myComplaints || 0})` : ''}</h3></span>
@@ -90,7 +104,7 @@ export default function HomePanel({ summary, summaryLoading, hasMoreLatest, load
       </>)}
     </section>}
     <div className="flex flex-col items-start gap-6 lg:flex-row">
-      {showKanbanHome ? <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
+      {showKanbanHome ? <div data-tour="kanban" className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
         <KanbanBoard items={list || []} mobile={false} onOpen={onOpen} Badge={Badge} formatDate={formatDate} onDropAction={(item, targetStatus) => kanbanDropAction(item, user, { onAssign, onSelfAssign: onTakeReport, onOpenPicAction, onReopen }, targetStatus)} />
       </div> : <div className={`grid min-w-0 flex-1 items-start gap-6 ${mainGridColsClass}`}>
         {showAttention && <div className="min-w-0 space-y-3">{openSection('Perlu tindakan Anda', attention, true)}{loaded && counts.attention > attention.length && <p className="text-xs text-slate-400">Menampilkan {attention.length} dari {counts.attention} laporan. Lihat daftar laporan untuk lainnya.</p>}</div>}

@@ -9,13 +9,17 @@
 - Service worker hanya didaftarkan dalam production pada secure context. Development tidak mendaftarkan worker, agar cache tidak mengganggu perubahan kode.
 - Worker menyimpan halaman fallback offline dan ikon umum saja. HTML aplikasi, API komplain, dan mutasi tidak dicache. Tidak ada pengiriman antrean offline. Halaman offline pertama membutuhkan worker yang pernah terpasang saat online.
 - Worker baru mengikuti lifecycle pembaruan normal (tanpa memaksa reload atau aktivasi saat pengguna sedang mengisi form). Header `/sw.js` mencegah cache HTTP yang menahan pemeriksaan versi baru.
+- Push notification OS dikirim dari server untuk laporan baru, penugasan PIC, pembaruan/penyelesaian, komplain yang dibuka kembali, mention, reaksi, dan pengumuman. Pengguna tetap harus mengaktifkan izin push di setiap perangkat/browser.
 
 ## Penggunaan di perangkat
 
 1. Publikasikan build production pada alamat HTTPS yang dapat diakses perangkat.
 2. Android: buka alamat itu di Chrome, gunakan tombol instal atau menu browser.
 3. iOS: buka di Safari → Bagikan → Tambahkan ke Layar Utama → aktifkan Open as Web App bila tersedia → Tambah.
-4. Buka ikon yang terpasang dan periksa standalone, akses API, formulir, serta rekap.
+4. Buka ikon yang terpasang, lalu tekan **Aktifkan notifikasi** dan izinkan notifikasi di perangkat.
+5. Periksa standalone, akses API, formulir, dan rekap.
+
+Push untuk iOS/iPadOS membutuhkan versi 16.4 atau lebih baru dan aplikasi web yang telah ditambahkan ke Layar Utama. Jika izin pernah diblokir, ubah izin notifikasi melalui Settings perangkat/browser. Web Push dan service worker menangani notifikasi ketika tab/aplikasi tidak sedang terbuka.
 
 `localhost` mendukung pengujian lokal; alamat HTTP LAN komputer bukan pengganti deployment HTTPS untuk pemasangan perangkat lain. Fitur instalasi/prompt bergantung browser. User harus menyetujui pemasangan di perangkatnya.
 

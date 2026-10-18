@@ -15,12 +15,18 @@ export default function PushPrompt({ userId, active, onExpired }) {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [installRequired, setInstallRequired] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   useEffect(() => {
-    if (!active || !userId || !pushSupported()) return;
+    if (!active || !userId) return;
     let alive = true;
     try { if (localStorage.getItem(dismissKey(userId))) return; } catch { /* localStorage unavailable */ }
-    if (Notification.permission === 'denied') return;
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (isIos && !standalone) { setInstallRequired(true); setVisible(true); return () => { alive = false; }; }
+    if (!pushSupported()) return;
+    if (Notification.permission === 'denied') { setPermissionDenied(true); setVisible(true); return () => { alive = false; }; }
     existingPushSubscription().then((existing) => { if (alive && !existing) setVisible(true); }).catch(() => {});
     return () => { alive = false; };
   }, [active, userId]);
@@ -37,15 +43,20 @@ export default function PushPrompt({ userId, active, onExpired }) {
     finally { setBusy(false); }
   }
 
+  function openInstallGuide() {
+    window.dispatchEvent(new Event('komplain:open-install-guide'));
+    dismiss();
+  }
+
   if (!visible) return null;
   return <aside role="status" aria-label="Aktifkan notifikasi" className="flex items-start gap-3 rounded-xl border border-blue-900/60 bg-blue-950/20 p-4 text-sm">
     <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300"><Bell aria-hidden="true" className="h-4 w-4" /></span>
     <div className="min-w-0 flex-1">
-      <p className="font-semibold">Aktifkan notifikasi?</p>
-      <p className="mt-0.5 text-xs leading-5 text-slate-400">Dapatkan info laporan baru, penugasan, dan sebutan langsung di layar HP/laptop meski aplikasi ini sedang tertutup.</p>
+      <p className="font-semibold">{installRequired ? 'Pasang aplikasi untuk notifikasi' : permissionDenied ? 'Izin notifikasi belum aktif' : 'Aktifkan notifikasi?'}</p>
+      <p className="mt-0.5 text-xs leading-5 text-slate-400">{installRequired ? 'Di iPhone/iPad, tambahkan Komplain ke Layar Utama dan buka dari ikonnya terlebih dahulu.' : permissionDenied ? 'Izin notifikasi diblokir oleh perangkat. Ubah izin Komplain dari pengaturan notifikasi Safari/perangkat, lalu aktifkan kembali.' : 'Dapatkan info laporan baru, penugasan, pengumuman, dan sebutan langsung di layar HP/laptop meski aplikasi ini sedang tertutup.'}</p>
       {error && <p role="alert" className="mt-1.5 text-xs text-red-300">{error}</p>}
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <button disabled={busy} onClick={enable} className={`${button} bg-blue-600 text-white hover:bg-blue-500`}>{busy ? 'Mengaktifkan…' : 'Aktifkan notifikasi'}</button>
+        {installRequired ? <button disabled={busy} onClick={openInstallGuide} className={`${button} bg-blue-600 text-white hover:bg-blue-500`}>Cara pasang</button> : permissionDenied ? <button disabled={busy} onClick={dismiss} className={`${button} bg-blue-600 text-white hover:bg-blue-500`}>Mengerti</button> : <button disabled={busy} onClick={enable} className={`${button} bg-blue-600 text-white hover:bg-blue-500`}>{busy ? 'Mengaktifkan…' : 'Aktifkan notifikasi'}</button>}
         <button disabled={busy} onClick={dismiss} className={`${button} text-slate-300 hover:bg-slate-800`}>Nanti saja</button>
       </div>
     </div>

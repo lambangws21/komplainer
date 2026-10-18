@@ -77,11 +77,21 @@ export async function sendBroadcast(payload, db = firestoreDb()) {
 export function pushTargetsForMutation(action, item, mentions, accounts) {
   const targets = [];
   const push = (userId, title, body) => { if (userId) targets.push({ userId, title, body, url: '/komplain' }); };
-  if (action === 'create' && item.statusCase === 'Ada Kendala') {
-    for (const account of accounts) if (['admin', 'petugas'].includes(account.role) && account.active) push(account.id, 'Laporan baru', `${item.dokter || 'Dokter'} · ${item.rumahSakit || 'RS'}`);
+  if (action === 'create') {
+    for (const account of accounts) if (['admin', 'petugas'].includes(account.role) && account.active && account.id !== item.pelaporId) push(account.id, 'Laporan baru', `${item.dokter || 'Dokter'} · ${item.rumahSakit || 'RS'}`);
   }
-  if (action === 'assign' && item.picId && item.pelaporId) push(item.pelaporId, 'Laporan Anda ditugaskan', `PIC: ${item.picNama || '-'}`);
+  if (action === 'assign' && item.picId) {
+    push(item.picId, 'Tugas komplain baru', `${item.dokter || 'Dokter'} · ${item.rumahSakit || 'RS'}`);
+    if (item.pelaporId && item.pelaporId !== item.picId) push(item.pelaporId, 'Laporan Anda ditugaskan', `PIC: ${item.picNama || '-'}`);
+  }
   if (action === 'followUp' && item.pelaporId) push(item.pelaporId, item.statusPenanganan === 'Selesai' ? 'Laporan Anda selesai ditangani' : 'Ada update penanganan laporan Anda', `${item.dokter || 'Laporan'} · ${item.rumahSakit || ''}`.trim());
+  if (action === 'reopen' && item.picId) push(item.picId, 'Komplain dibuka kembali', `${item.dokter || 'Dokter'} · ${item.rumahSakit || 'RS'}`);
   for (const mentionedId of mentions || []) push(mentionedId, 'Anda disebut', `${item.dokter || 'Laporan'} · ${item.rumahSakit || ''}`.trim());
   return targets;
+}
+
+export function announcementRecipientIds(item, accounts) {
+  return [...new Set(accounts.filter((account) => account.active && account.id !== item.createdBy && (
+    item.audience === 'all' || item.audience === account.role || (item.audience === 'users' && item.recipientIds?.includes(account.id))
+  )).map((account) => account.id))];
 }

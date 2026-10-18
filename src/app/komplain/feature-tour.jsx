@@ -14,6 +14,7 @@ function stepsFor(role) {
     createReport: { element: '[data-tour="create-report"]', popover: { title: 'Laporkan masalah baru', description: 'Klik di sini kapan saja untuk membuat laporan komplain baru.' } },
     navTabs: { element: '[data-tour="nav-tabs"]', popover: { title: 'Berpindah halaman', description: 'Gunakan tab ini untuk berpindah antara Beranda dan daftar Laporan.' } },
     notifications: { element: '[data-tour="notifications"]', popover: { title: 'Notifikasi laporan', description: 'Laporan baru yang belum Anda buka akan muncul di sini.' } },
+    kanban: { element: '[data-tour="kanban"]', popover: { title: 'Papan Kanban — geser untuk ubah status', description: 'Setiap kartu adalah satu laporan, dikelompokkan per kolom status: Baru, Diproses, Menunggu, Selesai. Klik-tahan sebuah kartu lalu seret ke kolom lain untuk langsung memindahkan status penanganannya — tidak perlu buka form lagi. Klik kartu (tanpa menyeret) untuk melihat detail lengkapnya.' } },
     accountMenu: { element: '[data-tour="account-menu"]', popover: { title: 'Akun & pengaturan', description: 'Kelola profil, password, notifikasi HP, dan buka tur ini lagi kapan saja dari sini.' } },
   };
   const intro = { popover: { title: 'Selamat datang di Komplainer!', description: 'Mari kenalan singkat dengan fitur utama lewat beberapa langkah berikut.' } };
@@ -22,12 +23,13 @@ function stepsFor(role) {
     { element: '[data-tour="admin-sidebar"]', popover: { title: 'Navigasi admin', description: 'Semua menu Admin ada di sini: Laporan, Pengguna, Pengumuman, Backup, dan Jadwal.' } },
     shared.stats,
     { element: '[data-tour="sla"]', popover: { title: 'Laporan terlambat', description: 'Laporan lebih dari 3 hari tanpa pembaruan otomatis muncul di sini, supaya tidak terlewat.' } },
+    shared.kanban,
     { element: '[data-tour="calendar"]', popover: { title: 'Kalender jadwal', description: 'Lihat sekilas jadwal & acara yang akan datang.' } },
     shared.createReport,
     shared.notifications,
     shared.accountMenu,
   ];
-  return [intro, shared.stats, shared.createReport, shared.navTabs, shared.notifications, shared.accountMenu];
+  return [intro, shared.stats, shared.kanban, shared.createReport, shared.navTabs, shared.notifications, shared.accountMenu];
 }
 
 export default function FeatureTour({ open, onOpenChange, role }) {

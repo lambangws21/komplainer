@@ -1,4 +1,11 @@
 /* Scope includes portalled dialogs so forms share the page palette. */
+.mobile-dialog-viewport {
+  max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem));
+}
+
+@media (min-width: 640px) {
+  .mobile-dialog-viewport { max-height: 85dvh; }
+}
 .komplain-theme {
   --accent: 56 189 248;
   --accent-strong: 3 105 161;
