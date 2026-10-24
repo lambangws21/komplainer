@@ -1,0 +1,46 @@
+name: Daily reminder push notifications
+
+# GitHub's cron runs in UTC; WIB is UTC+7, so each line below is the WIB time minus 7 hours:
+#   00:00 UTC -> 07:00 WIB  "pagi"
+#   03:00 UTC -> 10:00 WIB  "perjalanan"
+#   06:00 UTC -> 13:00 WIB  "siang"
+#   13:00 UTC -> 20:00 WIB  "malam"
+# Scheduled here instead of Vercel Cron because the project is on Vercel's Hobby plan, which caps
+# native cron jobs at 2/day — both already used by /api/cron/backup and /api/cron/daily-checkin.
+on:
+  schedule:
+    - cron: '0 0 * * *'
+    - cron: '0 3 * * *'
+    - cron: '0 6 * * *'
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: 'Reminder slot to send immediately (pagi, perjalanan, siang, malam)'
+        required: true
+        type: choice
+        options: [pagi, perjalanan, siang, malam]
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve slot and call reminder endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: https://komplainer.vercel.app
+        run: |
+          if [ -n "${{ inputs.slot }}" ]; then
+            SLOT="${{ inputs.slot }}"
+          else
+            case "${{ github.event.schedule }}" in
+              '0 0 * * *') SLOT="pagi" ;;
+              '0 3 * * *') SLOT="perjalanan" ;;
+              '0 6 * * *') SLOT="siang" ;;
+              '0 13 * * *') SLOT="malam" ;;
+              *) echo "Unknown schedule: ${{ github.event.schedule }}"; exit 1 ;;
+            esac
+          fi
+          echo "Sending reminder slot: $SLOT"
+          curl -fsS -X GET "$APP_URL/api/cron/reminder?slot=$SLOT" \
+            -H "Authorization: Bearer $CRON_SECRET"
