@@ -4,9 +4,16 @@ import { firestoreDb, photoBucket, usesFirestore } from './firestore-store.mjs';
 import { BACKUPS, backupId } from './firestore-domain.mjs';
 import { ApiError } from './api-error.mjs';
 export const backupEnabled = () => usesFirestore() && process.env.FIREBASE_BACKUP_ENABLED === 'true';
+// Trims whitespace around both the configured secret and the supplied token before comparing —
+// a copy-pasted GitHub Actions secret commonly picks up a trailing newline/space, which would
+// otherwise silently fail the exact-length check below and always return 401.
 export function cronAuthorized(header, secret) {
-  if (!secret || secret.length < 32 || typeof header !== 'string') return false;
-  const expected = Buffer.from(`Bearer ${secret}`); const supplied = Buffer.from(header);
+  if (!secret || typeof header !== 'string') return false;
+  const cleanSecret = secret.trim();
+  if (cleanSecret.length < 32) return false;
+  const match = header.match(/^Bearer\s+(.*)$/is);
+  if (!match) return false;
+  const expected = Buffer.from(cleanSecret); const supplied = Buffer.from(match[1].trim());
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 export function retryDelay(attempts) { return Math.min(86400000, 60000 * 2 ** Math.min(attempts, 10)); }

@@ -1,13 +1,20 @@
 'use client';
 import { useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone, Compass, Heart, ThumbsUp } from 'lucide-react';
+import { RefreshCw, LogOut, ChevronDown, UserCog, Bell, Inbox, Megaphone, Compass, Heart, ThumbsUp, Share2 } from 'lucide-react';
 import RoleBadge from './role-badge';
 import InfoPanel from './info-panel';
 import PushToggle from './push-toggle';
 import SoundToggle from './sound-toggle';
 import SoundSettings from './sound-settings';
 import ThemeToggle from './theme-toggle';
+import { appShareText, appShareUrl, whatsappShareUrl } from './share-report.mjs';
+
+async function shareApp() {
+  const text = appShareText();
+  if (typeof navigator !== 'undefined' && navigator.share) { try { await navigator.share({ title: 'Komplainer', text, url: appShareUrl() }); } catch { /* user cancelled the share sheet */ } }
+  else if (typeof window !== 'undefined') window.open(whatsappShareUrl(text), '_blank', 'noopener');
+}
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -60,6 +67,7 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
             {showNav && <DropdownMenu.Item onSelect={onOpenTour} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800"><Compass aria-hidden="true" className="h-4 w-4" />Jelajahi fitur</DropdownMenu.Item>}
             {showNav && <PushToggle onExpired={onExpired} />}
             {showNav && <SoundToggle onOpenSoundSettings={() => setSoundSettingsOpen(true)} />}
+            <DropdownMenu.Item onSelect={shareApp} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-800 focus:bg-slate-800"><Share2 aria-hidden="true" className="h-4 w-4" />Bagikan aplikasi</DropdownMenu.Item>
             <DropdownMenu.Separator className="my-2 h-px bg-slate-800" />
             <DropdownMenu.Item disabled={loggingOut || busy} onSelect={onLogout} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-300 outline-none hover:bg-red-950/40 focus:bg-red-950/40 data-[disabled]:opacity-50"><LogOut aria-hidden="true" className="h-4 w-4" />{loggingOut ? 'Keluar…' : 'Keluar'}</DropdownMenu.Item>
           </DropdownMenu.Content></DropdownMenu.Portal>
@@ -67,6 +75,6 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
         <SoundSettings open={soundSettingsOpen} onOpenChange={setSoundSettingsOpen} />
       </div>
     </div>
-    {showNav && <nav data-tour="nav-tabs" aria-label="Halaman komplain" className={`mx-auto mt-3 grid max-w-7xl gap-1.5 sm:flex sm:flex-wrap ${user?.role === 'admin' ? 'grid-cols-3 lg:hidden' : 'grid-cols-2'}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`${buttonClass} min-w-0 px-2 text-xs sm:px-4 sm:text-sm ${(tab === value || (value === 'table' && tab === 'recap')) ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{label}</button>)}</nav>}
+    {showNav && <nav data-tour="nav-tabs" aria-label="Halaman komplain" className={`mx-auto mt-3 flex max-w-7xl gap-2 overflow-x-auto pb-1 ${user?.role === 'admin' ? 'lg:hidden' : ''}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`inline-flex min-h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-4 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 ${(tab === value || (value === 'table' && tab === 'recap')) ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700/40 bg-slate-800/60 text-slate-300 hover:border-slate-600/60'}`}>{label}</button>)}</nav>}
   </header>;
 }

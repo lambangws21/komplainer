@@ -11,6 +11,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Popover from '@radix-ui/react-popover';
 import { Search, PlusCircle, Pencil, Archive, UserRound, MessageCircle, RotateCcw, Eye, X, ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Table2, BarChart3, ArrowDownUp, Download, AlertCircle, CheckCircle2, Wrench, ListChecks, SlidersHorizontal, MoreHorizontal, Trash2, Heart, ThumbsUp, ArrowRight, Kanban as KanbanIcon, Users } from 'lucide-react';
+import ShareButton from './share-button';
+import ShareImageButton from './share-image-button';
 import { dateKey, shiftDate, shiftMonth, summarizeWeek, summarizeMonth, weekStart } from './weekly-summary.mjs';
 import { reportsToCsv, recapToCsv, groupRecap, downloadCsv } from './export.mjs';
 import WorkflowBadge from './workflow-badge';
@@ -23,7 +25,7 @@ import RoleBadge from './role-badge';
 import ImplantBadge from './implant-badge';
 import { IMPLANTS, detectImplants } from './implant.mjs';
 import { initialSolution, handlingSolution } from './report-process.mjs';
-import { WORKFLOW_STATUSES, STATUS_CASE, canEditReport, canAddPhoto, canFollowUp, canReopen, handlingStatus, workflowCardStyle, daysSince, historyChanges, formatHistoryValue, historyFieldLabel, editedFieldLabels } from './workflow.mjs';
+import { WORKFLOW_STATUSES, STATUS_CASE, canEditReport, canDeleteReport, canAddPhoto, canFollowUp, canReopen, handlingStatus, workflowCardStyle, daysSince, historyChanges, formatHistoryValue, historyFieldLabel, editedFieldLabels } from './workflow.mjs';
 import { apiRequest } from './api-client.mjs';
 import KanbanBoard, { Avatar, kanbanDropAction } from './kanban-board';
 
@@ -242,7 +244,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
     {user.role === 'admin' && handlingStatus(item) !== 'Selesai' && <button disabled={busy} aria-label={`Tentukan PIC ${item.dokter || ''}`} onClick={() => onAssign(item)} className={mobile ? `${control} px-3 text-violet-300 hover:bg-violet-500/10` : `${iconControl} text-violet-300 hover:bg-violet-500/10`}><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Tentukan PIC</span>}</button>}
     {user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' && <button disabled={busy} aria-label={`Ambil laporan ${item.dokter || ''} sebagai PIC`} onClick={() => onSelfAssign(item)} className={mobile ? `${control} px-3 text-violet-300 hover:bg-violet-500/10` : `${iconControl} text-violet-300 hover:bg-violet-500/10`}><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Ambil sebagai PIC</span>}</button>}
     {canReopen(item, user) && <button disabled={busy} aria-label={`Buka kembali ${item.dokter || ''}`} onClick={() => onReopen(item)} className={mobile ? `${control} px-3 text-amber-300 hover:bg-amber-500/10` : `${iconControl} text-amber-300 hover:bg-amber-500/10`}><RotateCcw aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Buka kembali</span>}</button>}
-    {canEditReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Arsipkan laporan ${item.dokter || ''}`} onClick={() => onDelete(item)} className={mobile ? `${control} px-3 text-slate-300 hover:bg-red-500/10 hover:text-red-300` : `${iconControl} text-slate-300 hover:bg-red-500/10 hover:text-red-300`}><Archive aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Arsipkan</span>}</button>}
+    {canDeleteReport(item, user) && <button disabled={busy || item.id == null} aria-label={`Arsipkan laporan ${item.dokter || ''}`} onClick={() => onDelete(item)} className={mobile ? `${control} px-3 text-slate-300 hover:bg-red-500/10 hover:text-red-300` : `${iconControl} text-slate-300 hover:bg-red-500/10 hover:text-red-300`}><Archive aria-hidden="true" className="h-4 w-4 shrink-0" />{mobile && <span>Arsipkan</span>}</button>}
   </div>;
   const mobileActions = (item) => {
     // The problem description is already visible on the card itself, so a petugas facing an
@@ -257,7 +259,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
       user.role === 'admin' && handlingStatus(item) !== 'Selesai' && ['Tentukan PIC', UserRound, () => onAssign(item)],
       user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' && ['Ambil sebagai PIC', UserRound, () => onSelfAssign(item)],
       canReopen(item, user) && ['Buka kembali', RotateCcw, () => onReopen(item)],
-      canEditReport(item, user) && ['Arsipkan laporan', Archive, () => onDelete(item)],
+      canDeleteReport(item, user) && ['Arsipkan laporan', Archive, () => onDelete(item)],
     ].filter(Boolean);
     const [primaryLabel, PrimaryIcon, primaryAction, primaryColor] = primary;
     return <div className="flex items-center gap-2"><button disabled={busy} onClick={primaryAction} className={`${control} min-w-0 flex-1 px-3 text-white ${primaryColor}`}><PrimaryIcon aria-hidden="true" className="h-4 w-4 shrink-0" />{primaryLabel}</button>{options.length > 0 && <DropdownMenu.Root><DropdownMenu.Trigger disabled={busy} aria-label={`Aksi lainnya untuk ${item.dokter || 'laporan'}`} className={`${control} shrink-0 border border-slate-700 bg-slate-800 px-3`}><MoreHorizontal aria-hidden="true" className="h-5 w-5" /></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content data-role={user.role} align="end" sideOffset={6} className="komplain-theme z-[70] min-w-48 rounded-xl border border-slate-700 bg-slate-900 p-1.5 text-slate-100 shadow-xl">{options.map(([label, Icon, onSelect]) => <DropdownMenu.Item key={label} disabled={busy} onSelect={onSelect} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-slate-700 data-[disabled]:opacity-40"><Icon aria-hidden="true" className="h-4 w-4" />{label}</DropdownMenu.Item>)}</DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>}</div>;
@@ -389,7 +391,8 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
           <p className="mt-1 break-words text-sm font-semibold text-slate-100">{detail.tindakan || 'Tindakan belum diisi'}</p>
           {detectImplants(detail).length > 0 && <div className="mt-2"><ImplantBadge item={detail} /></div>}
         </div>
-        {onReact && <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {onReact && <>
           <button type="button" disabled={reacting} aria-pressed={detail.reactions?.mine === 'like'} onClick={() => toggleReaction('like')} className={`${control} min-h-9 gap-1.5 px-3 text-xs ${detail.reactions?.mine === 'like' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}><ThumbsUp aria-hidden="true" className="h-3.5 w-3.5" />{detail.reactions?.like || 0}</button>
           <button type="button" disabled={reacting} aria-pressed={detail.reactions?.mine === 'love'} onClick={() => toggleReaction('love')} className={`${control} min-h-9 gap-1.5 px-3 text-xs ${detail.reactions?.mine === 'love' ? 'bg-pink-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}><Heart aria-hidden="true" className="h-3.5 w-3.5" />{detail.reactions?.love || 0}</button>
           {detail.reactionDetails?.length > 0 && <Popover.Root>
@@ -399,7 +402,10 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
               <Popover.Arrow className="fill-slate-700" />
             </Popover.Content></Popover.Portal>
           </Popover.Root>}
-        </div>}
+          </>}
+          <ShareButton item={detail} formatDate={formatDate} className={`${control} min-h-9 w-9 px-0 bg-slate-800 text-slate-300 hover:bg-slate-700`} />
+          <ShareImageButton item={detail} formatDate={formatDate} className={`${control} min-h-9 w-9 px-0 bg-slate-800 text-slate-300 hover:bg-slate-700`} />
+        </div>
       </div>
       <div aria-label="Bagian detail laporan" className="flex shrink-0 gap-1 border-b border-slate-800 bg-slate-900 px-3 py-2 sm:px-5 lg:hidden">{[['report', 'Ringkasan'], ['content', 'Isi laporan'], ['history', `Riwayat${detailLoading ? '' : ` (${history.length})`}`]].map(([value, label]) => <button key={value} aria-pressed={detailTab === value} onClick={() => setDetailTab(value)} className={`${control} min-w-0 flex-1 px-2 text-xs sm:text-sm lg:flex-none lg:min-w-40 ${detailTab === value ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>{label}</button>)}</div>
       <div ref={detailScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:p-0" data-dialog-scroll>

@@ -277,7 +277,7 @@ test('non-owners see status-only summaries, never report content, in list result
   assert.equal(full.restricted, undefined);
   assert.equal(full.dokter, 'dr. Rahasia');
 });
-test('report owner can delete their own untouched report, but not once handling has started', () => {
+test('report owner can delete (archive) their own report at any stage, but never someone else\'s', () => {
   const f = createFixture();
   const owner = f.addUser('owner@example.test');
   const stranger = f.addUser('stranger@example.test');
@@ -288,8 +288,9 @@ test('report owner can delete their own untouched report, but not once handling 
   const pic = f.addUser('pic@example.test', 'petugas');
   const assigned = f.request({ action: 'assign', ...f.adminSession, id: second.id, version: second.version, picId: pic.user.id }).data;
   const inProgress = f.request({ action: 'followUp', status: 'C3 - Moderate', ...pic, id: assigned.id, version: assigned.version, statusPenanganan: 'Diproses', catatan: 'Mulai' }).data;
-  assert.equal(f.request({ action: 'delete', ...owner, id: inProgress.id, version: inProgress.version }).code, 403);
-  assert.equal(f.request({ action: 'delete', ...f.adminSession, id: inProgress.id, version: inProgress.version }).status, 'success');
+  // Archiving only hides the report (data/history stay intact), so unlike content edits the
+  // owner keeps this right even once a PIC has started working on it.
+  assert.equal(f.request({ action: 'delete', ...owner, id: inProgress.id, version: inProgress.version }).status, 'success');
 });
 test('every petugas can read full report content, not just assigned cases', () => {
   const f = createFixture();

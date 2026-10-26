@@ -85,7 +85,11 @@ export function mutateReport(action, body, old, user, accounts, photos, now) {
       item.photoRefs = [...(old.photoRefs || []), ...photos];
       detail.fields = contents.filter((key) => old[key] !== item[key]);
     } else if (action === 'delete') {
-      if (!mayEdit) throw new ApiError('Tidak diizinkan mengarsipkan laporan.', 403);
+      // Deliberately looser than mayEdit: archiving only hides the report (data/history stay
+      // intact, an admin can still see it), so a pelapor keeps this right for their own report
+      // at any stage — unlike editing content a PIC may already be acting on.
+      const mayDelete = user.role === 'admin' || old.pelaporId === user.id;
+      if (!mayDelete) throw new ApiError('Tidak diizinkan mengarsipkan laporan.', 403);
       item.deletedAt = now;
     } else if (action === 'assign') {
       if (user.role !== 'admin' && !(user.role === 'petugas' && !old.picId && body.picId === user.id)) throw new ApiError('Hanya admin dapat mengubah penugasan.', 403);

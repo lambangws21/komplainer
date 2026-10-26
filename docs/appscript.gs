@@ -530,7 +530,9 @@ function handle(body) {
     if (body.photos) item.fotoIds = (item.fotoIds || []).concat(uploadPhotosWithCap(body.photos, item));
     updatedFields = Object.keys(beforeContent).filter(function (key) { return beforeContent[key] !== item[key]; });
   } else if (action === 'delete') {
-    if (user.role !== 'admin' && !(item.pelaporId === user.id && item.statusPenanganan === 'Baru')) fail('Hanya admin atau pelapor saat status Baru dapat menghapus laporan.', 403);
+    // Looser than content-edit rights: archiving only hides the report, so a pelapor keeps it
+    // for their own report at any stage, unlike editing content a PIC may already act on.
+    if (user.role !== 'admin' && item.pelaporId !== user.id) fail('Tidak diizinkan mengarsipkan laporan.', 403);
     item.deletedAt = nowIso();
   } else if (action === 'assign') {
     // A petugas may pick up a case with no PIC yet; reassigning an already-handled case stays admin-only.

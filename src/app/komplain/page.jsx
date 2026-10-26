@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, AlertTriangle, UserRound, Inbox, CheckCircle2, AtSign, ExternalLink, Trash2 } from 'lucide-react';
+import { X, AlertTriangle, UserRound, Inbox, CheckCircle2, AtSign, ExternalLink, Trash2, LoaderCircle } from 'lucide-react';
 import HomePanel from './home-panel';
 import ReportForm from './report-form';
 import { readDraft, writeDraft, clearDraft } from './report-draft.mjs';
@@ -34,6 +34,8 @@ import FieldInfo from './field-info';
 import FeatureTour from './feature-tour';
 import AuthShell from './auth-shell';
 import SeverityInfo from './severity-info';
+import ShareButton from './share-button';
+import ShareImageButton from './share-image-button';
 import { initialSolution, handlingSolution, handlingDraft, mergeEditable } from './report-process.mjs';
 import { ANNOUNCEMENT_AUDIENCES, announcementAudience } from '@/lib/announcement-policy.mjs';
 import { apiRequest, postJson } from './api-client.mjs';
@@ -133,6 +135,7 @@ export default function KomplainPage() {
   const [form, setForm] = useState(newForm);
   const [successText, setSuccessText] = useState('');
   const [savedReportId, setSavedReportId] = useState(null);
+  const [savedConfirm, setSavedConfirm] = useState(null);
   const [showExample, setShowExample] = useState(false);
   const [picEditMode, setPicEditMode] = useState(false);
   // True when the status was already decided by a desktop Kanban drag (the dialog was opened via
@@ -207,7 +210,7 @@ export default function KomplainPage() {
     setModal(null); setEditItem(null); setWorkflowItem(null); setForm(newForm()); setFormPhotos([]); setPicPhotos([]);
     setAssignedNotice([]); setIncomingNotice([]); setCriticalNotice([]); criticalSeenRef.current = new Set(); setReadIds(new Set());
     setMentionables([]); setMentionNotice([]); mentionSeenRef.current = new Set(); setReactionNotice([]); reactionSeenRef.current = new Set(); setAnnouncementNotice([]); setAnnouncementError(''); setAnnouncementDismissing(null); announcementSeenRef.current = new Set(); announcementReadRef.current = new Set(); setAnnouncementBannerOpen(true);
-    setSuccessText(''); setSavedReportId(null); setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
+    setSuccessText(''); setSavedReportId(null); setSavedConfirm(null); setTab('form'); setLoadError(''); setAuthError(''); setAuthNotice(notice);
   }, []);
   useEffect(() => { userRef.current = user; }, [user]);
   useEffect(() => { if (user?.id) setReadIds(loadReadIds(user.id)); }, [user?.id]);
@@ -327,6 +330,17 @@ export default function KomplainPage() {
     if (user?.id && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword) { fetchData(); fetchNotices(); apiRequest('/api/mentionables').then((result) => setMentionables(result.data || [])).catch(() => {}); }
   }, [user?.id, user?.approval, user?.mustChangePassword, fetchData, fetchNotices]);
   const sessionActive = !!user?.id && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
+  // Opens the report a shared WhatsApp/Telegram link points at (see share-report.mjs) — same
+  // path a notification click already uses, so access control is identical (no report content
+  // leaks into the URL itself, just an id the viewer must already be allowed to read).
+  useEffect(() => {
+    if (!sessionActive) return;
+    const id = new URLSearchParams(window.location.search).get('report');
+    if (!id) return;
+    setTab('table'); setPendingDetailId(id);
+    const url = new URL(window.location.href); url.searchParams.delete('report');
+    window.history.replaceState({}, '', url);
+  }, [sessionActive]);
   // First-login feature tour. Tracked per account in localStorage (not account metadata) —
   // it's a lightweight device-local nicety, not worth a server round-trip; worst case a user
   // sees it again once on a new device, which is harmless.
@@ -549,11 +563,21 @@ export default function KomplainPage() {
     if (action === 'followUp' && result.data && result.data.statusPenanganan !== 'Selesai') {
       setWorkflowItem(result.data); setWorkflow(handlingDraft(result.data)); setPicHistory([]); picHistoryLoadedId.current = null;
       setPicSaved(result.data.statusPenanganan === 'Menunggu' ? 'RTL tersimpan. Status: Menunggu.' : 'RTL tersimpan. Status: Diproses.');
+      setSavedConfirm({ item: result.data, message: result.data.statusPenanganan === 'Menunggu' ? 'RTL tersimpan. Status: Menunggu.' : 'RTL tersimpan. Status: Diproses.' });
       return;
     }
-    setSuccessText({ save: editItem ? 'Perubahan laporan disimpan.' : 'Laporan terkirim. Pantau tindak lanjut di daftar laporan.', delete: 'Laporan diarsipkan. Data dan riwayat tetap tersimpan di sheet.', assign: 'Penanggung jawab diperbarui.', followUp: 'Tindak lanjut berhasil disimpan.', reopen: 'Laporan dibuka kembali.', purge: 'Laporan dihapus permanen dari sistem.' }[action]);
+    // Creating a new report, finishing a PIC follow-up, or assigning a PIC (most often triggered
+    // from a Kanban drag) is the moment worth a clear "it's saved" confirmation — distinct enough
+    // from the muted inline banner that a user dragging a card on Kanban actually notices it,
+    // and closes the assign/selfAssign dialog on the way in. Other mutations (delete/reopen/purge)
+    // stay on the lighter inline banner instead of interrupting with a modal.
+    if (action === 'followUp' || (action === 'save' && !editItem) || action === 'assign') {
+      setSavedConfirm({ item: result.data, message: action === 'followUp' ? 'Tindak lanjut selesai dicatat.' : action === 'assign' ? 'Penanggung jawab (PIC) berhasil disimpan.' : 'Laporan terkirim. Pantau tindak lanjut di daftar laporan.' });
+    } else {
+      setSuccessText({ save: 'Perubahan laporan disimpan.', delete: 'Laporan diarsipkan. Data dan riwayat tetap tersimpan di sheet.', reopen: 'Laporan dibuka kembali.', purge: 'Laporan dihapus permanen dari sistem.' }[action]);
+      setSavedReportId(['delete', 'purge'].includes(action) ? null : result.data?.id || workflowItem?.id || null);
+    }
     setModal(null); setTab('table');
-    setSavedReportId(['delete', 'purge'].includes(action) ? null : result.data?.id || workflowItem?.id || null);
   }
   async function takeReport(item) {
     if (mutationLock.current) return;
@@ -629,7 +653,7 @@ export default function KomplainPage() {
     finally { setLoggingOut(false); }
   }
   const titles = { form: editItem ? 'Edit laporan komplain' : 'Buat laporan komplain', review: 'Tinjau laporan', delete: 'Arsipkan laporan?', assign: 'Tentukan penanggung jawab', selfAssign: 'Ambil laporan sebagai PIC', picAction: picEditMode ? 'Tangani komplain' : 'Detail & Tindak Lanjut', reopen: 'Buka kembali laporan', announcement: 'Buat pengumuman', announcementView: 'Pengumuman', schedule: scheduleForm?.id ? 'Ubah jadwal' : 'Jadwalkan acara' };
-  const descriptions = { form: 'Isi kolom bertanda *. Solusi awal boleh dikosongkan.', review: 'Pastikan informasi sudah benar sebelum disimpan.', delete: 'Laporan disembunyikan dari daftar aktif. Data dan riwayat tetap tersimpan.', assign: 'Pilih PIC aktif untuk menangani komplain ini.', selfAssign: 'Anda akan menjadi penanggung jawab dan dapat langsung melakukan tindak lanjut.', picAction: picEditMode ? 'Pilih status penanganan, tulis catatan, lalu Simpan Pembaruan.' : 'Laporan masuk → Ambil sebagai PIC → RTL → Penyelesaian → Selesai.', reopen: 'Jelaskan mengapa masalah masih membutuhkan penanganan.', announcement: 'Pilih penerima, jenis, dan masa tampil. Pengumuman muncul tanpa menghalangi pekerjaan.', announcementView: announcementNotice.length > 1 ? `${announcementNotice.length} pengumuman aktif.` : '', schedule: 'Jadwal tersimpan di aplikasi dan otomatis masuk ke kalender yang Anda subscribe (lihat tile Google Calendar di Beranda).' };
+  const descriptions = { form: 'Isi kolom bertanda *. Solusi awal boleh dikosongkan.', review: 'Pastikan informasi sudah benar sebelum disimpan.', delete: 'Laporan akan disembunyikan dan tidak lagi muncul di aplikasi — ini BUKAN hapus permanen. Data dan riwayat tetap tersimpan di sistem untuk keperluan audit, tapi tidak dapat Anda pulihkan sendiri dari aplikasi.', assign: 'Pilih PIC aktif untuk menangani komplain ini.', selfAssign: 'Anda akan menjadi penanggung jawab dan dapat langsung melakukan tindak lanjut.', picAction: picEditMode ? 'Pilih status penanganan, tulis catatan, lalu Simpan Pembaruan.' : 'Laporan masuk → Ambil sebagai PIC → RTL → Penyelesaian → Selesai.', reopen: 'Jelaskan mengapa masalah masih membutuhkan penanganan.', announcement: 'Pilih penerima, jenis, dan masa tampil. Pengumuman muncul tanpa menghalangi pekerjaan.', announcementView: announcementNotice.length > 1 ? `${announcementNotice.length} pengumuman aktif.` : '', schedule: 'Jadwal tersimpan di aplikasi dan otomatis masuk ke kalender yang Anda subscribe (lihat tile Google Calendar di Beranda).' };
   // Not signed in yet (or still checking) gets a standalone centered auth page, not the full app
   // shell — there's no sidebar/tabs/notifications to show before a session exists.
   const showAuthShell = authChecking || !user;
@@ -641,10 +665,10 @@ export default function KomplainPage() {
   // from the extra room) without the admin-only sidebar/tabs that come with showAdminSidebar.
   const wideLayout = showAdminSidebar || (!!user && user.role === 'petugas' && !['pending', 'rejected'].includes(user.approval) && !user.mustChangePassword);
   const mainContent = authChecking ? <AuthShell><LoadingState title="Menyiapkan Komplainer…" description="Memeriksa sesi dan hak akses Anda." /></AuthShell> : !user ? <AuthShell><LoginPanel onLogin={(next) => { setUser(next); setAuthError(''); setAuthNotice(''); }} initialError={authError} notice={authNotice} /></AuthShell> : ['pending', 'rejected'].includes(user.approval) ? <ApprovalPanel user={user} onApproved={setUser} onExpired={endSession} /> : user.mustChangePassword ? <PasswordPanel user={user} onChanged={endSession} onExpired={endSession} /> : tab === 'account' ? <div className="space-y-6"><ProfilePanel user={user} onChanged={endSession} onExpired={endSession} /><PasswordPanel user={user} onChanged={endSession} onExpired={endSession} /></div> : tab === 'users' && user.role === 'admin' ? <AccountsPanel currentUser={user} onExpired={endSession} reports={list} /> : tab === 'announcements' && user.role === 'admin' ? <AnnouncementPanel key={announcementRefresh} onCreate={openAnnouncement} onChanged={fetchNotices} /> : tab === 'backup' && user.role === 'admin' ? <div className="space-y-6"><BackupPanel /><BackupSheetPanel /></div> : <>
-      {successText && <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-800/50 bg-slate-900 p-3 text-sm text-emerald-200"><p className="min-w-0 flex-1">{successText}</p>{savedReportId && <button onClick={() => { setTab('table'); setPendingDetailId(savedReportId); }} className={`${buttonClass} text-blue-300`}>Lihat laporan</button>}<button aria-label="Tutup pesan berhasil" onClick={() => setSuccessText('')} className={`${buttonClass} px-3`}><X aria-hidden="true" className="h-4 w-4" /></button></div>}
+      {successText && <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-800/50 bg-slate-900 p-3 text-sm text-emerald-200"><p className="min-w-0 flex-1">{successText}</p>{savedReportId && <button onClick={() => { setTab('table'); setPendingDetailId(savedReportId); }} className={`${buttonClass} text-blue-300`}>Lihat laporan</button>}{savedReportId && list.find((item) => item.id === savedReportId) && <ShareButton item={list.find((item) => item.id === savedReportId)} formatDate={formatDate} className={`${buttonClass} text-blue-300`} />}<button aria-label="Tutup pesan berhasil" onClick={() => setSuccessText('')} className={`${buttonClass} px-3`}><X aria-hidden="true" className="h-4 w-4" /></button></div>}
       {loadError && <div role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200"><p className="font-semibold">Laporan gagal dimuat</p><p className="mt-1 break-words">{loadError}</p>{loaded && <p className="mt-1">Menampilkan data terakhir yang berhasil dimuat.</p>}<button disabled={loading} onClick={fetchData} className={`${buttonClass} mt-3 bg-slate-800`}>Coba lagi</button></div>}
       {loading && <LoadingState compact={loaded} title={loaded ? 'Memperbarui laporan…' : 'Memuat laporan Anda…'} description={loaded ? 'Data terbaru sedang diambil.' : 'Menyiapkan daftar laporan dan rekap mingguan.'} />}
-      {tab === 'form' ? <HomePanel summary={homeSummary} summaryLoading={summaryLoading} hasMoreLatest={latestCursor != null} loadingMoreLatest={loadingMoreLatest} onLoadMoreLatest={loadMoreLatest} schedules={upcomingSchedules} schedulesLoading={schedulesLoading} onScheduleReport={onScheduleReport} onCreateSchedule={onCreateSchedule} onEditSchedule={onEditSchedule} onExpired={endSession} user={user} busy={busy} list={list} Badge={Badge} formatDate={formatDate} onCreate={() => openForm()} onOpen={(item) => { markRead(item.id); setTab('table'); setPendingDetailId(item.id); }} onReports={() => setTab('table')} onRecap={() => setTab('recap')} onUsers={() => setTab('users')} onAnnouncement={openAnnouncement} onAssign={(item) => openWorkflow('assign', item)} onFollowUp={(item) => openPicAction(item, true)} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onTakeReport={takeReport} /> : <DataView key={tab} initialView={tab === 'recap' ? 'weekly' : 'table'} list={list} loaded={loaded} loading={loading} loadError={loadError} busy={busy} user={user} levels={LEVELS} Badge={Badge} formatDate={formatDate} today={today} onCreate={() => openForm()} onEdit={openForm} onDelete={(item) => openWorkflow('delete', item)} onAssign={(item) => openWorkflow('assign', item)} onSelfAssign={takeReport} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onExpired={endSession} onMarkRead={markRead} pendingDetailId={pendingDetailId} onPendingDetailHandled={() => setPendingDetailId(null)} onBulkPurge={bulkPurge} onReact={react} />}
+      {tab === 'form' ? <HomePanel summary={homeSummary} summaryLoading={summaryLoading} hasMoreLatest={latestCursor != null} loadingMoreLatest={loadingMoreLatest} onLoadMoreLatest={loadMoreLatest} schedules={upcomingSchedules} schedulesLoading={schedulesLoading} onScheduleReport={onScheduleReport} onCreateSchedule={onCreateSchedule} onEditSchedule={onEditSchedule} onExpired={endSession} user={user} busy={busy} list={list} Badge={Badge} formatDate={formatDate} onCreate={() => openForm()} onOpen={(item) => { markRead(item.id); setTab('table'); setPendingDetailId(item.id); }} onReports={() => setTab('table')} onRecap={() => setTab('recap')} onUsers={() => setTab('users')} onAnnouncement={openAnnouncement} onAssign={(item) => openWorkflow('assign', item)} onFollowUp={(item) => openPicAction(item, true)} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onTakeReport={takeReport} onReact={react} onDelete={(item) => openWorkflow('delete', item)} /> : <DataView key={tab} initialView={tab === 'recap' ? 'weekly' : 'table'} list={list} loaded={loaded} loading={loading} loadError={loadError} busy={busy} user={user} levels={LEVELS} Badge={Badge} formatDate={formatDate} today={today} onCreate={() => openForm()} onEdit={openForm} onDelete={(item) => openWorkflow('delete', item)} onAssign={(item) => openWorkflow('assign', item)} onSelfAssign={takeReport} onOpenPicAction={openPicAction} onReopen={(item) => openWorkflow('reopen', item)} onExpired={endSession} onMarkRead={markRead} pendingDetailId={pendingDetailId} onPendingDetailHandled={() => setPendingDetailId(null)} onBulkPurge={bulkPurge} onReact={react} />}
     </>;
 
   if (showAuthShell) return <main lang="id" data-role="pelapor" className="komplain-theme min-h-screen bg-slate-950 text-slate-100">{mainContent}</main>;
@@ -675,7 +699,7 @@ export default function KomplainPage() {
     {['assign', 'selfAssign', 'reopen'].includes(modal) && <form onSubmit={(event) => { event.preventDefault(); mutate(modal === 'selfAssign' ? 'assign' : modal); }} className="mt-5 space-y-4"><p className="break-words text-sm text-slate-300">{workflowItem?.dokter} · {workflowItem?.tindakan}</p><div className="flex flex-wrap gap-2"><WorkflowBadge status={handlingStatus(workflowItem || {})} /><SimpleStatusBadge item={workflowItem || {}} /><AlertBadge item={workflowItem || {}} /></div>
       {modal === 'selfAssign' && <p className="rounded-xl border border-violet-900/60 bg-violet-950/20 p-3 text-sm text-violet-200">Anda akan ditugaskan sebagai PIC untuk laporan ini dan dapat langsung mencatat tindak lanjut.</p>}
       {modal !== 'selfAssign' && <>      {modal === 'assign' && <div><label htmlFor="workflow-pic" className="mb-2 block text-sm">Penanggung jawab / PIC</label><select id="workflow-pic" value={workflow.picId} onChange={(event) => setWorkflow({ ...workflow, picId: event.target.value })} className={inputClass}><option value="">Belum ditugaskan</option>{assignees.filter((pic) => pic.role === 'petugas' || pic.id === workflowItem?.pelaporId).map((pic) => <option key={pic.id} value={pic.id}>{pic.nama} · {ROLE_LABELS[pic.role]} · {pic.unit}</option>)}</select>{assignees.length === 0 && <p className="mt-2 text-xs text-amber-300">Tambahkan akun Petugas (PIC) aktif melalui menu Pengguna terlebih dahulu.</p>}</div>}
-      <div><label id="workflow-note-label" htmlFor="workflow-note" className="mb-2 block text-sm">{modal === 'reopen' ? 'Alasan membuka kembali *' : 'Catatan penugasan (opsional)'}</label><VisualTextEditor ref={(el) => { textareaRefs.current.workflowNote = el; }} id="workflow-note" placeholder="Tuliskan perkembangan atau alasan perubahan… (ketik @ untuk menyebut pengguna)" rows={3} maxLength={2000} required={!['assign', 'selfAssign'].includes(modal)} value={workflow.catatan} onChange={(event) => setWorkflow({ ...workflow, catatan: event.target.value })} className={inputClass} mentionables={mentionables} /></div></>}<div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button disabled={busy} className={`${buttonClass} flex-1 bg-blue-600`}>{busy ? 'Menyimpan…' : modal === 'selfAssign' ? 'Ambil sebagai PIC' : 'Simpan'}</button></div>
+      <div><label id="workflow-note-label" htmlFor="workflow-note" className="mb-2 block text-sm">{modal === 'reopen' ? 'Alasan membuka kembali *' : 'Catatan penugasan (opsional)'}</label><VisualTextEditor ref={(el) => { textareaRefs.current.workflowNote = el; }} id="workflow-note" placeholder="Tuliskan perkembangan atau alasan perubahan… (ketik @ untuk menyebut pengguna)" rows={3} maxLength={2000} required={!['assign', 'selfAssign'].includes(modal)} value={workflow.catatan} onChange={(event) => setWorkflow({ ...workflow, catatan: event.target.value })} className={inputClass} mentionables={mentionables} /></div></>}<div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button disabled={busy} className={`${buttonClass} flex-1 bg-blue-600`}>{busy && <LoaderCircle aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" />}{busy ? 'Menyimpan…' : modal === 'selfAssign' ? 'Ambil sebagai PIC' : 'Simpan'}</button></div>
     </form>}
     {modal === 'schedule' && scheduleForm && <form onSubmit={(event) => { event.preventDefault(); mutateSchedule(scheduleForm.id ? 'update' : 'create'); }} className="mt-5 space-y-4">
       <div><label htmlFor="schedule-title" className="mb-2 block text-sm">Judul acara</label><input id="schedule-title" required maxLength={200} value={scheduleForm.title} onChange={(event) => setScheduleForm({ ...scheduleForm, title: event.target.value })} className={inputClass} /></div>
@@ -706,7 +730,7 @@ export default function KomplainPage() {
           <button type="button" onClick={() => { setShowPicHistory((value) => { const next = !value; if (next) loadPicHistory(workflowItem); return next; }); }} className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-slate-200">Riwayat tindak lanjut {picHistory.length > 0 && `(${picHistory.length})`}<span className="text-xs text-blue-300">{showPicHistory ? 'Sembunyikan' : 'Tampilkan'}</span></button>
           {showPicHistory && <>{picDetailLoading && <p className="mt-3 text-sm text-slate-400">Memuat riwayat…</p>}{!picDetailLoading && !picDetailError && !picHistory.length && <p className="mt-3 text-sm text-slate-400">Belum ada riwayat.</p>}<ol className="mt-3 space-y-3">{picHistory.map((entry) => { const changes = historyChanges(entry.detail); const fields = editedFieldLabels(entry.detail); return <li key={entry.id} className="border-l-2 border-blue-800 pl-3"><p className="text-sm font-semibold">{entry.aksi}</p><p className="mt-0.5 break-words text-xs text-slate-400">{entry.nama} · {new Date(entry.tanggal).toLocaleString('id-ID')}</p>{fields.length > 0 && <p className="mt-1 text-xs text-slate-400">Diubah: {fields.join(', ')}</p>}{changes.length > 0 && <ul className="mt-1 space-y-0.5">{changes.map((change) => <li key={change.key} className="text-xs text-amber-300">{formatHistoryChange(change, LEVELS, formatDate)}</li>)}</ul>}{entry.catatan && <FormattedText text={entry.catatan} className={`mt-1.5 ${historyNote}`} />}{entry.fotoUrls?.length > 0 && <div className="mt-1.5"><PhotoGallery urls={entry.fotoUrls} label="Foto tindak lanjut" thumbClassName="h-16 w-16" /></div>}</li>; })}</ol></>}
         </div>
-        <div className={formFooter}><Dialog.Close className={`${buttonClass} w-full bg-slate-800`}>Tutup</Dialog.Close></div>
+        <div className={formFooter}><ShareButton item={workflowItem} formatDate={formatDate} className={`${buttonClass} bg-slate-800 px-3 text-slate-300 hover:bg-slate-700`} /><ShareImageButton item={workflowItem} formatDate={formatDate} className={`${buttonClass} bg-slate-800 px-3 text-slate-300 hover:bg-slate-700`} /><Dialog.Close className={`${buttonClass} flex-1 bg-slate-800`}>Tutup</Dialog.Close></div>
       </> : <>
         <button type="button" onClick={() => { setPicEditMode(false); setPicSaved(''); }} className="flex items-center gap-1.5 text-sm text-blue-300 hover:underline">← Kembali ke detail</button>
         <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-800/30 p-3">
@@ -750,7 +774,7 @@ export default function KomplainPage() {
           {lastNote && <details className="rounded-xl border border-slate-700 p-3"><summary className="cursor-pointer text-sm text-slate-300">Lihat catatan riwayat terakhir</summary><p className="mt-2 text-xs text-slate-400">{lastNote.nama} · {new Date(lastNote.tanggal).toLocaleString('id-ID')}</p><FormattedText text={lastNote.catatan} className="mt-1 text-sm leading-6" /></details>}
           <div><label className="mb-2 block text-sm">Lampiran (opsional)</label><PhotoPicker photos={picPhotos} onAdd={addPicPhoto} onRemove={removePicPhoto} totalExisting={(workflowItem?.fotoUrls?.length || 0) + picHistory.reduce((sum, entry) => sum + (entry.fotoUrls?.length || 0), 0)} /></div>
           {picSaved && <p role="status" className="rounded-xl border border-emerald-600 bg-emerald-950/40 p-3 text-sm text-emerald-200">{picSaved}</p>}
-          <div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button type="submit" disabled={busy} className={`${buttonClass} flex-1 bg-violet-600 hover:bg-violet-500`}>{busy ? 'Menyimpan…' : 'Simpan Pembaruan'}</button></div>
+          <div className={formFooter}><Dialog.Close disabled={busy} className={`${buttonClass} flex-1 bg-slate-800`}>Batal</Dialog.Close><button type="submit" disabled={busy} className={`${buttonClass} flex-1 bg-violet-600 hover:bg-violet-500`}>{busy && <LoaderCircle aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" />}{busy ? 'Menyimpan…' : 'Simpan Pembaruan'}</button></div>
         </form>
       </>}
     </div>; })()}
@@ -806,6 +830,17 @@ export default function KomplainPage() {
     <div className={dialogHeader}><Dialog.Title className="flex items-center gap-2 pr-12 text-xl font-bold"><AtSign aria-hidden="true" className="h-5 w-5 shrink-0 text-blue-300" />Anda disebut</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{mentionNotice.length > 1 ? `${mentionNotice.length} orang menyebut Anda` : 'Seseorang menyebut Anda'} di catatan atau tindak lanjut laporan.</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
     <div className={`${dialogBody} space-y-3 pt-4`}>{mentionNotice.map((item) => <button key={item.id} type="button" onClick={() => { dismissMention(item); setTab('table'); setPendingDetailId(item.reportId); }} className="w-full rounded-xl border border-blue-900/50 bg-blue-950/20 p-3 text-left transition hover:bg-blue-950/40"><p className="text-sm font-semibold">{item.byNama} menyebut Anda</p>{item.snippet && <p className="mt-1 break-words text-xs text-slate-300">“{item.snippet}”</p>}<span className="mt-2 inline-block text-xs font-semibold text-blue-300">Lihat laporan →</span></button>)}
       <div className={formFooter}><button onClick={() => mentionNotice.forEach(dismissMention)} className={`${buttonClass} flex-1 bg-slate-800`}>Tandai sudah dibaca</button></div>
+    </div>
+  </Dialog.Content></Dialog.Portal></Dialog.Root>
+  <Dialog.Root open={!!savedConfirm} onOpenChange={(open) => { if (!open) setSavedConfirm(null); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" /><Dialog.Content data-role={user?.role || 'pelapor'} className={`${mobileDialog} max-w-md`}>
+    <div className={dialogHeader}><Dialog.Title className="flex items-center gap-2 pr-12 text-xl font-bold text-emerald-300"><CheckCircle2 aria-hidden="true" className="h-6 w-6 shrink-0" />Laporan tersimpan</Dialog.Title><Dialog.Description className="mt-2 pr-8 text-sm text-slate-400">{savedConfirm?.message}</Dialog.Description><Dialog.Close aria-label="Tutup" className={`${buttonClass} absolute right-3 top-3 px-3 text-slate-300 hover:bg-slate-800`}><X aria-hidden="true" className="h-5 w-5" /></Dialog.Close></div>
+    <div className={`${dialogBody} space-y-4 pt-4`}>
+      {savedConfirm?.item && <div className="min-w-0 rounded-xl border border-slate-800 bg-slate-800/30 p-3"><p className="break-words text-sm font-semibold">{savedConfirm.item.dokter || 'Dokter belum diisi'}</p><p className="mt-0.5 break-words text-xs text-slate-400">{savedConfirm.item.rumahSakit || 'RS belum diisi'}</p></div>}
+      <div className={formFooter}>
+        {savedConfirm?.item && <ShareButton item={savedConfirm.item} formatDate={formatDate} label="Bagikan laporan" className={`${buttonClass} flex-1 bg-blue-600 text-white hover:bg-blue-500`} />}
+        {savedConfirm?.item && <ShareImageButton item={savedConfirm.item} formatDate={formatDate} className={`${buttonClass} w-11 px-0 bg-slate-800 text-slate-300 hover:bg-slate-700`} />}
+        <button onClick={() => { const id = savedConfirm?.item?.id; setSavedConfirm(null); if (id) { setModal(null); setTab('table'); setPendingDetailId(id); } }} className={`${buttonClass} flex-1 bg-slate-800`}>Lihat laporan</button>
+      </div>
     </div>
   </Dialog.Content></Dialog.Portal></Dialog.Root>
   </main>;

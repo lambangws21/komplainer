@@ -34,6 +34,14 @@ test('permissions, version conflict, delegated reporter PIC and complete/reopen/
  assert.equal(item.selesaiPada,'');
  item=mutateReport('delete',{version:4},item,admin,accounts,[],now).item; assert.ok(item.deletedAt);
 });
+test('pelapor can archive their own report at any stage, even past Baru — unlike content edits, archiving never touches PIC work',()=>{
+ let item=mutateReport('create',body(),null,reporter,accounts,[],now).item;
+ item=mutateReport('assign',{version:1,picId:pic.id},item,admin,accounts,[],now).item;
+ item=mutateReport('followUp',{version:2,statusPenanganan:'Diproses',status:'C3 - Moderate'},item,pic,accounts,[],now).item;
+ assert.throws(()=>mutateReport('delete',{version:3},item,stranger,accounts,[],now),e=>e.code===403);
+ item=mutateReport('delete',{version:3},item,reporter,accounts,[],now).item;
+ assert.ok(item.deletedAt);
+});
 test('pelapor keeps the ability to attach photos once the PIC has started, but content edits are silently dropped — until Selesai blocks even that',()=>{
  let item=mutateReport('create',body(),null,reporter,accounts,[],now).item;
  item=mutateReport('assign',{version:1,picId:pic.id},item,admin,accounts,[],now).item;
@@ -90,4 +98,11 @@ test('cron rejects missing or weak secret and backoff is bounded',()=>{
  for(const header of [null,'Bearer wrong',`Bearer ${secret}extra`]) assert.equal(cronAuthorized(header,secret),false);
  assert.equal(cronAuthorized('Bearer short','short'),false);
  assert.ok(retryDelay(20)<=86400000);
+});
+test('cron tolerates whitespace a copy-pasted GitHub Actions secret commonly picks up',()=>{
+ const secret='x'.repeat(64);
+ assert.equal(cronAuthorized(`Bearer ${secret}\n`,secret),true);
+ assert.equal(cronAuthorized(`Bearer  ${secret}`,secret),true);
+ assert.equal(cronAuthorized(`Bearer ${secret}`,`${secret}\n`),true);
+ assert.equal(cronAuthorized(`Bearer ${secret}`,` ${secret} `),true);
 });
