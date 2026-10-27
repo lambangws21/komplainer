@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { ChevronRight, ThumbsUp, Heart, MessageCircle, Lock, CalendarPlus, CalendarDays, UserRound, Archive } from 'lucide-react';
 import { InlineText } from './formatted-text';
 import WorkflowBadge from './workflow-badge';
@@ -28,9 +29,19 @@ function relativeTime(value) {
 // unit — both the team-wide "Laporan Team" and the personal "Laporan Saya" section render a
 // list of these.
 export default function FeedCard({ item, user, busy, formatDate, Badge, onOpen, onReact, onAssign, onFollowUp, onTakeReport, onSchedule, onDelete }) {
+  // Guards against a rapid double-tap firing two overlapping react() calls with the same stale
+  // `item.version` — data-view.jsx's own reaction row already does this; this mirrors it. Declared
+  // before the restricted-item early return so hook order stays stable across renders.
+  const [reacting, setReacting] = useState(false);
   if (item.restricted) return <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-3"><span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-500"><Lock aria-hidden="true" className="h-4 w-4" /></span><p className="min-w-0 flex-1 text-sm text-slate-500">Dilaporkan pengguna lain · isi laporan tidak dapat diakses</p></div></article>;
 
-  const reacting = false;
+  async function toggleReaction(type) {
+    if (!onReact || reacting) return;
+    setReacting(true);
+    try { await onReact(item.id, item.version, type); }
+    catch (error) { if (error?.code !== 401) console.error(error); }
+    finally { setReacting(false); }
+  }
   const primary = user.role === 'admin' && !item.picId && handlingStatus(item) !== 'Selesai' ? ['Tentukan PIC', () => onAssign(item)]
     : user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' ? ['Ambil sebagai PIC', () => onTakeReport(item)]
     : canFollowUp(item, user) ? ['Tangani', () => onFollowUp(item)]
@@ -63,8 +74,8 @@ export default function FeedCard({ item, user, busy, formatDate, Badge, onOpen, 
     <div className="flex items-center justify-between gap-0.5 border-t border-slate-800 px-1 py-1 sm:gap-1 sm:px-3">
       <div className="flex min-w-0 items-center gap-0 sm:gap-1">
         {onReact ? <>
-          <button type="button" disabled={reacting || busy} aria-pressed={item.reactions?.mine === 'like'} aria-label="Suka" title="Suka" onClick={() => onReact(item.id, item.version, 'like')} className={`inline-flex min-h-9 items-center gap-0.5 rounded-lg px-1.5 text-xs font-semibold sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm ${item.reactions?.mine === 'like' ? 'text-blue-400' : 'text-slate-400 hover:bg-slate-800'}`}><ThumbsUp aria-hidden="true" className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" /><span className="hidden sm:inline">Suka</span>{item.reactions?.like > 0 && <span>{item.reactions.like}</span>}</button>
-          <button type="button" disabled={reacting || busy} aria-pressed={item.reactions?.mine === 'love'} aria-label="Cinta" title="Cinta" onClick={() => onReact(item.id, item.version, 'love')} className={`inline-flex min-h-9 items-center gap-0.5 rounded-lg px-1.5 text-xs font-semibold sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm ${item.reactions?.mine === 'love' ? 'text-pink-400' : 'text-slate-400 hover:bg-slate-800'}`}><Heart aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 ${item.reactions?.mine === 'love' ? 'fill-current' : ''}`} /><span className="hidden sm:inline">Cinta</span>{item.reactions?.love > 0 && <span>{item.reactions.love}</span>}</button>
+          <button type="button" disabled={reacting || busy} aria-pressed={item.reactions?.mine === 'like'} aria-label="Suka" title="Suka" onClick={() => toggleReaction('like')} className={`inline-flex min-h-9 items-center gap-0.5 rounded-lg px-1.5 text-xs font-semibold sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm ${item.reactions?.mine === 'like' ? 'text-blue-400' : 'text-slate-400 hover:bg-slate-800'}`}><ThumbsUp aria-hidden="true" className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" /><span className="hidden sm:inline">Suka</span>{item.reactions?.like > 0 && <span>{item.reactions.like}</span>}</button>
+          <button type="button" disabled={reacting || busy} aria-pressed={item.reactions?.mine === 'love'} aria-label="Cinta" title="Cinta" onClick={() => toggleReaction('love')} className={`inline-flex min-h-9 items-center gap-0.5 rounded-lg px-1.5 text-xs font-semibold sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm ${item.reactions?.mine === 'love' ? 'text-pink-400' : 'text-slate-400 hover:bg-slate-800'}`}><Heart aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 ${item.reactions?.mine === 'love' ? 'fill-current' : ''}`} /><span className="hidden sm:inline">Cinta</span>{item.reactions?.love > 0 && <span>{item.reactions.love}</span>}</button>
         </> : <span className="inline-flex items-center gap-3 px-2 text-xs text-slate-500">{(item.reactions?.like || item.reactions?.love) > 0 && <span className="flex items-center gap-1"><Heart aria-hidden="true" className="h-3.5 w-3.5 fill-pink-400 text-pink-400" />{(item.reactions?.like || 0) + (item.reactions?.love || 0)}</span>}</span>}
         <button type="button" onClick={() => onOpen(item)} aria-label="Riwayat" title="Riwayat" className="inline-flex min-h-9 items-center gap-0.5 rounded-lg px-1.5 text-xs font-semibold text-slate-400 hover:bg-slate-800 sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm"><MessageCircle aria-hidden="true" className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" /><span className="hidden sm:inline">Riwayat</span>{item.version > 1 && <span>{item.version - 1}</span>}</button>
         <ShareButton item={item} formatDate={formatDate} iconClassName="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" className="inline-flex min-h-9 items-center gap-0.5 rounded-lg px-1.5 text-xs font-semibold text-slate-400 hover:bg-slate-800 sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm" />
