@@ -45,7 +45,7 @@ export default function FeedCard({ item, user, busy, formatDate, Badge, onOpen, 
   const primary = user.role === 'admin' && !item.picId && handlingStatus(item) !== 'Selesai' ? ['Tentukan PIC', () => onAssign(item)]
     : user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' ? ['Ambil sebagai PIC', () => onTakeReport(item)]
     : canFollowUp(item, user) ? ['Tangani', () => onFollowUp(item)]
-    : [handlingStatus(item) === 'Selesai' ? 'Lihat penyelesaian' : 'Lihat detail', () => onOpen(item)];
+    : [handlingStatus(item) === 'Selesai' ? 'Penyelesaian' : 'Lihat detail', () => onOpen(item)];
 
   return <article className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm shadow-black/20">
     <div className="p-4 sm:p-5">

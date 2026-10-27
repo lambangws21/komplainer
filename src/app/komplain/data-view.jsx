@@ -252,7 +252,7 @@ export default function DataView({ initialView = 'table', list, loaded, loading,
     const primary = user.role === 'admin' && !item.picId && handlingStatus(item) !== 'Selesai' ? ['Tentukan PIC', UserRound, () => onAssign(item), 'bg-amber-600 hover:bg-amber-500']
       : user.role === 'petugas' && !item.picId && handlingStatus(item) !== 'Selesai' ? ['Ambil sebagai PIC', UserRound, () => onSelfAssign(item), 'bg-amber-600 hover:bg-amber-500']
       : canFollowUp(item, user) ? ['Tangani komplain', MessageCircle, () => onOpenPicAction(item, true), 'bg-blue-600 hover:bg-blue-500']
-      : [handlingStatus(item) === 'Selesai' ? 'Lihat penyelesaian' : 'Lihat detail', Eye, () => openDetail(item), 'bg-blue-600 hover:bg-blue-500'];
+      : [handlingStatus(item) === 'Selesai' ? 'Penyelesaian' : 'Lihat detail', Eye, () => openDetail(item), 'bg-blue-600 hover:bg-blue-500'];
     const options = [
       ['Detail & riwayat', Eye, () => openDetail(item)],
       (canEditReport(item, user) || canAddPhoto(item, user)) && ['Edit laporan', Pencil, () => onEdit(item)],
