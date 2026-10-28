@@ -18,12 +18,21 @@ async function shareApp() {
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, reactionNotice = [], onOpenReactionNotice, onMarkAllReactionsRead, announcementCount = 0, onToggleAnnouncements, onOpenTour }) {
+export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, onRefresh, onLogout, onExpired, newButtonRef, masterButtonRef, unreadItems = [], formatDate, onOpenNotification, onMarkAllRead, reactionNotice = [], onOpenReactionNotice, onMarkAllReactionsRead, announcementCount = 0, onToggleAnnouncements, onOpenTour, reportCount }) {
   const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
   const showNav = user && user.approval !== 'pending' && user.approval !== 'rejected' && !user.mustChangePassword;
-  // Admin gets the full set here too — on small screens AdminSidebar is hidden (lg:block), so
-  // this pill row is the only way to reach Pengguna/Pengumuman/Backup on mobile.
-  const tabs = [['form', 'Beranda'], ['table', 'Laporan'], ...(user?.role === 'admin' ? [['users', 'Pengguna'], ['announcements', 'Pengumuman'], ['backup', 'Backup']] : [])];
+  // Kanban and Jadwal get their own mobile tab (desktop keeps them inline on Beranda — a mobile
+  // board needs real vertical tabs per status, not columns, so it's worth its own destination;
+  // see kanban-board.jsx's `mobile` mode and schedule-panel.jsx). Admin gets the full set here
+  // too — on small screens AdminSidebar is hidden (lg:block), so this pill row is the only way
+  // to reach Pengguna/Pengumuman/Backup on mobile.
+  const tabs = [
+    ['form', 'Ringkasan'],
+    ...(user?.role === 'admin' || user?.role === 'petugas' ? [['kanban', 'Kanban']] : []),
+    ['table', reportCount != null ? `Laporan (${reportCount})` : 'Laporan'],
+    ...(user?.role === 'admin' ? [['jadwal', 'Jadwal']] : []),
+    ...(user?.role === 'admin' ? [['users', 'Pengguna'], ['announcements', 'Pengumuman'], ['backup', 'Backup']] : []),
+  ];
   const unreadCount = unreadItems.length + reactionNotice.length;
   return <header className="sticky top-0 z-30 -mx-3 -mt-4 border-b border-slate-800 bg-slate-900/95 px-3 py-4 backdrop-blur sm:-mx-7 sm:-mt-8 sm:px-5">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
@@ -75,6 +84,9 @@ export default function Navbar({ user, tab, setTab, loading, busy, loggingOut, o
         <SoundSettings open={soundSettingsOpen} onOpenChange={setSoundSettingsOpen} />
       </div>
     </div>
-    {showNav && <nav data-tour="nav-tabs" aria-label="Halaman komplain" className={`mx-auto mt-3 flex max-w-7xl gap-2 overflow-x-auto pb-1 ${user?.role === 'admin' ? 'lg:hidden' : ''}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`inline-flex min-h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-4 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 ${(tab === value || (value === 'table' && tab === 'recap')) ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700/40 bg-slate-800/60 text-slate-300 hover:border-slate-600/60'}`}>{label}</button>)}</nav>}
+    {/* Kanban is also reachable inline on desktop Beranda for admin/petugas (see home-panel.jsx),
+        so this pill specifically hides at lg+ even though the rest of petugas's row doesn't —
+        they have no sidebar, so form/table/jadwal pills stay their only way to switch tabs there. */}
+    {showNav && <nav data-tour="nav-tabs" aria-label="Halaman komplain" className={`mx-auto mt-3 flex max-w-7xl gap-2 overflow-x-auto pb-1 ${user?.role === 'admin' ? 'lg:hidden' : ''}`}>{tabs.map(([value, label]) => <button key={value} ref={value === 'form' ? newButtonRef : value === 'table' ? masterButtonRef : undefined} disabled={busy || loggingOut} onClick={() => setTab(value)} aria-current={(tab === value || (value === 'table' && tab === 'recap')) ? 'page' : undefined} className={`inline-flex min-h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-4 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 ${value === 'kanban' ? 'lg:hidden' : ''} ${(tab === value || (value === 'table' && tab === 'recap')) ? 'border-emerald-500 bg-emerald-500 text-slate-950' : 'border-slate-700/40 bg-slate-800/60 text-slate-300 hover:border-slate-600/60'}`}>{label}</button>)}</nav>}
   </header>;
 }
