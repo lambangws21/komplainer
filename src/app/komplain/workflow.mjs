@@ -4,8 +4,8 @@ export const ROLE_LABELS = { admin: 'Admin', petugas: 'Petugas / PIC', pelapor: 
 // `code` is the persisted value compared throughout the app (statusCase === 'Sukses' / 'Ada
 // Kendala') — only `label` (the display text) reflects the hospital's own operation wording.
 export const STATUS_CASE = [
-  { code: 'Sukses', label: 'Tindakan Operasi: Sukses', color: 'text-emerald-300 border-emerald-800 bg-emerald-950/40' },
-  { code: 'Ada Kendala', label: 'Operasi Terkendala', color: 'text-red-300 border-red-800 bg-red-950/40' },
+  { code: 'Sukses', label: 'Tindakan: Sukses', color: 'text-emerald-300 border-emerald-800 bg-emerald-950/40' },
+  { code: 'Ada Kendala', label: 'Terkendala', color: 'text-red-300 border-red-800 bg-red-950/40' },
 ];
 export const handlingStatus = (item) => item.statusPenanganan || 'Baru';
 export const statusCaseLabel = (item) => STATUS_CASE.find((option) => option.code === item.statusCase)?.label || 'Belum diklasifikasikan';
