@@ -42,7 +42,7 @@ test('pelapor can archive their own report at any stage, even past Baru — unli
  item=mutateReport('delete',{version:3},item,reporter,accounts,[],now).item;
  assert.ok(item.deletedAt);
 });
-test('pelapor keeps the ability to attach photos once the PIC has started, but content edits are silently dropped — until Selesai blocks even that',()=>{
+test('pelapor and the handling PIC keep the ability to attach photos, even past Selesai; content edits stay dropped and strangers stay blocked',()=>{
  let item=mutateReport('create',body(),null,reporter,accounts,[],now).item;
  item=mutateReport('assign',{version:1,picId:pic.id},item,admin,accounts,[],now).item;
  item=mutateReport('followUp',{version:2,statusPenanganan:'Diproses',status:'C3 - Moderate'},item,pic,accounts,[],now).item;
@@ -58,7 +58,18 @@ test('pelapor keeps the ability to attach photos once the PIC has started, but c
  item=mutateReport('update',{...item,dokter:'dr. Admin Edit'},item,admin,accounts,[],now).item;
  assert.equal(item.dokter,'dr. Admin Edit');
  item=mutateReport('followUp',{version:item.version,statusPenanganan:'Selesai',jalanKeluar:'Solusi',status:'C2 - Major'},item,pic,accounts,[],now).item;
- assert.throws(()=>mutateReport('update',{...item},item,reporter,accounts,[{path:'y'}],now),e=>e.code===403);
+ // Same form-shaped body as above — a non-admin 'update' carrying `status` (severity) at all
+ // trips the unrelated "only admin may change severity" guard, which isn't what's under test.
+ const noSeverityBody=(source)=>({id:source.id,version:source.version,tanggal:source.tanggal,dokter:source.dokter,rumahSakit:source.rumahSakit,team:source.team,tindakan:source.tindakan,komplain:source.komplain,statusCase:source.statusCase,jalanKeluar:source.jalanKeluar,penangananSelanjutnya:source.penangananSelanjutnya});
+ // Past Selesai, the reporter can still attach another photo — content stays frozen either way.
+ const byReporter=mutateReport('update',noSeverityBody(item),item,reporter,accounts,[{path:'y'}],now);
+ assert.equal(byReporter.item.dokter,item.dokter);
+ assert.equal(byReporter.item.photoRefs.length,2);
+ // ...and so can the PIC who actually handled the case.
+ const byPic=mutateReport('update',noSeverityBody(byReporter.item),byReporter.item,pic,accounts,[{path:'z'}],now);
+ assert.equal(byPic.item.photoRefs.length,3);
+ // A stranger — neither the reporter, the handling PIC, nor admin — still cannot touch it at all.
+ assert.throws(()=>mutateReport('update',noSeverityBody(byPic.item),byPic.item,stranger,accounts,[{path:'w'}],now),e=>e.code===403);
 });
 test('publicReport strips internal storage fields and exposes only authenticated photo paths',()=>{
  const item=mutateReport('create',body(),null,reporter,accounts,[{path:'komplainer/reports/x/photo'}],now).item;

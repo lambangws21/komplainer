@@ -73,9 +73,10 @@ export function mutateReport(action, body, old, user, accounts, photos, now) {
     const mayEdit = user.role === 'admin' || old.pelaporId === user.id && old.statusPenanganan === 'Baru';
     if (action === 'update') {
       // Past "Baru" a pelapor can no longer change the content a PIC may already be responding
-      // to, but they can still attach more photos to their own report right up until it's
-      // Selesai — admin keeps full edit access throughout.
-      const mayAddPhoto = user.role === 'admin' || (old.pelaporId === user.id && old.statusPenanganan !== 'Selesai');
+      // to, but they can still attach more photos to their own report — even after it's Selesai,
+      // same as admin. The PIC who handled the case keeps that same photo-only right once Selesai
+      // too (before that they already attach photos through the 'followUp' action itself).
+      const mayAddPhoto = user.role === 'admin' || old.pelaporId === user.id || (old.picId === user.id && old.statusPenanganan === 'Selesai');
       if (!mayEdit && !mayAddPhoto) throw new ApiError('Hanya admin atau pelapor saat status Baru dapat mengedit laporan.', 403);
       const edited = content({ ...old, ...body, jalanKeluar: body.jalanKeluar ?? old.solusiAwal ?? (old.statusPenanganan === 'Baru' ? old.jalanKeluar || '' : '') });
       edited.solusiAwal = edited.jalanKeluar;

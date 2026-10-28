@@ -11,10 +11,12 @@ export const handlingStatus = (item) => item.statusPenanganan || 'Baru';
 export const statusCaseLabel = (item) => STATUS_CASE.find((option) => option.code === item.statusCase)?.label || 'Belum diklasifikasikan';
 export const canEditReport = (item, user) => !!user && (user.role === 'admin' || (item.pelaporId === user.id && handlingStatus(item) === 'Baru'));
 // Past "Baru" a pelapor can no longer change the report's content (a PIC may already be
-// responding to it), but they can still attach more photos to their own report — admin always
-// has full edit access. Separate from canEditReport so "can open the edit form" (which covers
-// both cases) doesn't get confused with "can also archive it" (canDeleteReport, below).
-export const canAddPhoto = (item, user) => !!user && (user.role === 'admin' || (item.pelaporId === user.id && handlingStatus(item) !== 'Selesai'));
+// responding to it), but they can still attach more photos to their own report — even after
+// Selesai, same as admin. The PIC who handled the case keeps that same photo-only right once
+// Selesai too (before that they already attach photos through the follow-up dialog itself).
+// Separate from canEditReport so "can open the edit form" (which covers both cases) doesn't get
+// confused with "can also archive it" (canDeleteReport, below).
+export const canAddPhoto = (item, user) => !!user && (user.role === 'admin' || item.pelaporId === user.id || (item.picId === user.id && handlingStatus(item) === 'Selesai'));
 // Looser than canEditReport: archiving only hides the report (data/history stay intact, an
 // admin can still see it), so a pelapor keeps this right for their own report at any stage.
 export const canDeleteReport = (item, user) => !!user && (user.role === 'admin' || item.pelaporId === user.id);
